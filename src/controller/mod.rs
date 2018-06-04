@@ -1,3 +1,4 @@
+pub mod command;
 pub mod product;
 pub mod vendor;
 
@@ -5,9 +6,9 @@ use std::cell::Cell;
 
 use hidapi::{HidApi, HidDevice};
 
-use endian::u32_to_le_array;
 use log;
 
+use self::command::{Command::*, InputMode, Subcommand::*, NEUTRAL_RUMBLE};
 use self::product::Product;
 use self::vendor::Vendor;
 
@@ -20,20 +21,6 @@ lazy_static! {
         }
     };
 }
-
-const SUBCOMMAND_HEADER: [u8; 10] = [
-    0x01, // Main command: rumble + subcommand
-    //----
-    0xF0, // Counter position, replace this before writing
-    0x00, // Neutral L rumble
-    0x01,
-    0x40,
-    0x40,
-    0x00, // Neutral R rumble
-    0x01,
-    0x40,
-    0x40,
-];
 
 pub struct JoyCon<'a> {
     device: HidDevice<'a>,
@@ -109,34 +96,34 @@ impl<'a> JoyCon<'a> {
     }
 
     pub fn set_leds(&self, bitmask: u8) -> Result<usize, &str> {
-        let result = self.do_subcommand(0x30, &[bitmask]);
-        self.device.read(&mut [0; 16]).unwrap(); // Ignore response
-        result
+        let sub = SetLeds(bitmask);
+        let cmd = DoSubcommand(self.rumble_counter.get(), &NEUTRAL_RUMBLE, sub);
+        self.device.write(&cmd.make_buffer())
     }
 
-    fn do_subcommand(&self, subcommand_code: u8, arguments: &[u8]) -> Result<usize, &'static str> {
-        let mut command = Vec::from(&mut SUBCOMMAND_HEADER[..]);
-        command[1] = self.rumble_counter.get();
-        command.push(subcommand_code);
-        command.extend_from_slice(&arguments);
-
-        self.inc_counter();
-
-        self.device.write(command.as_slice())
+    pub fn set_input_mode(&self, mode: InputMode) -> Result<usize, &str> {
+        let sub = SetInputMode(mode);
+        let cmd = DoSubcommand(self.rumble_counter.get(), &NEUTRAL_RUMBLE, sub);
+        self.device.write(&cmd.make_buffer())
     }
 
     fn read_spi(&self, addr: u32, buffer: &mut [u8]) -> Result<usize, &str> {
-        let mut args = Vec::from(&mut u32_to_le_array(addr)[..]);
+        let sub = ReadSpi(addr, buffer.len());
+        let cmd = DoSubcommand(self.rumble_counter.get(), &NEUTRAL_RUMBLE, sub);
 
-        args.push(buffer.len() as u8);
-        if let Err(e) = self.do_subcommand(0x10, &args[..]) {
-            return Err(e);
+        let cmd_buf = cmd.make_buffer();
+
+        let result = self.device.write(&cmd_buf);
+        if let Err(_) = result {
+            return result;
         }
 
         let mut response = Vec::new();
-        response.resize(20 + buffer.len(), 0);
-        if let Err(e) = self.device.read(response.as_mut_slice()) {
-            return Err(e);
+        // 4 extra response bytes
+        response.resize(4 + cmd_buf.len() + buffer.len(), 0);
+        let result = self.device.read(response.as_mut_slice());
+        if let Err(_) = result {
+            return result;
         }
 
         let start = response.len() - buffer.len();
@@ -144,7 +131,7 @@ impl<'a> JoyCon<'a> {
 
         log::i(&format!("read_spi @ 0x{:04x}: {}", addr, log::buf(&buffer)));
 
-        Ok(1)
+        result
     }
 
     fn inc_counter(&self) {
