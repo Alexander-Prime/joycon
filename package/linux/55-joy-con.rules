@@ -1,0 +1,7 @@
+## Allow user access to raw HID interface
+SUBSYSTEM=="hidraw", KERNELS=="*057E:200[67]*", TAG+="uaccess"
+
+## Suppress joystick rules and /dev/jsX devices
+KERNELS=="*057E:200[67]*", ENV{ID_INPUT_JOYSTICK}=="", ENV{ID_INPUT_JOYSTICK}=""
+KERNELS=="*057E:200[67]*", KERNEL=="js[0-9]*", RUN+="/bin/rm %E{DEVNAME}"
+
