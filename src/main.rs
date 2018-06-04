@@ -8,15 +8,15 @@ mod controller;
 mod endian;
 mod log;
 
-use std::time::Duration;
+use std::thread::sleep;
+use std::time::{Duration, Instant};
 
 use termion::{color::*, style::{*, Reset as Clear}};
 
 use controller::{JoyCon, product::Product};
 
-const TICK: Duration = Duration::from_millis(167);
-
 const PENDING_LEDS: [u8; 6] = [3, 5, 10, 12, 10, 5];
+const TICK: Duration = Duration::from_millis(16);
 
 fn main() {
     let mut controllers = <Vec<JoyCon>>::with_capacity(2);
@@ -36,23 +36,25 @@ fn main() {
         print_connected(jc);
     }
 
-    let mut counter: usize = 0;
+    let mut old_index: usize = 0;
+    let start_time = Instant::now();
 
     // Show a moving LED pattern to confirm we're connected and running
     loop {
-        for jc in controllers.iter() {
-            if let Err(e) = jc.set_leds(PENDING_LEDS[counter]) {
-                log::e(&format!(
-                    "Failed to set LEDs on [{}]; did it disconnect?",
-                    jc.serial_number(),
-                ));
-                log::e(e);
+        let led_index = (start_time.elapsed().subsec_nanos() / (1_000_000_000 / 6)) as usize;
+        if led_index != old_index {
+            for jc in controllers.iter() {
+                if let Err(e) = jc.set_leds(PENDING_LEDS[led_index]) {
+                    log::e(&format!(
+                        "Failed to set LEDs on [{}]; did it disconnect?",
+                        jc.serial_number(),
+                    ));
+                    log::e(e);
+                }
             }
+            old_index = led_index;
         }
-
-        counter = (counter + 1) % PENDING_LEDS.len();
-
-        std::thread::sleep(TICK);
+        sleep(TICK);
     }
     panic!("Main loop crashed. Check the logs.");
 }
