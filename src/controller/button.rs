@@ -1,0 +1,51 @@
+use self::ControllerButton::*;
+
+pub enum ControllerButton {
+    Y,
+    X,
+    B,
+    A,
+    RightSr,
+    RightSl,
+    R,
+    Zr,
+
+    Minus,
+    Plus,
+    Cr,
+    Cl,
+    Home,
+    Capture,
+
+    Down,
+    Up,
+    Right,
+    Left,
+    LeftSr,
+    LeftSl,
+    L,
+    Zl,
+}
+
+impl ControllerButton {
+    pub fn byteOffset(&self) -> usize {
+        match self {
+            Y | X | B | A | RightSr | RightSl | R | Zr => 0,
+            Minus | Plus | Cr | Cl | Home | Capture => 1,
+            Down | Up | Right | Left | LeftSr | LeftSl | L | Zl => 2,
+        }
+    }
+
+    pub fn bitMask(&self) -> u8 {
+        match self {
+            Y | Minus | Down => 0x01,
+            X | Plus | Up => 0x02,
+            B | Cr | Right => 0x04,
+            A | Cl | Left => 0x08,
+            RightSr | Home | LeftSr => 0x10,
+            RightSl | Capture | LeftSl => 0x20,
+            R | L => 0x40,
+            Zr | Zl => 0x80,
+        }
+    }
+}

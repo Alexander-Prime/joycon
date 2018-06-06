@@ -1,5 +1,8 @@
+pub mod analog;
+pub mod button;
 pub mod command;
 pub mod product;
+pub mod state;
 pub mod vendor;
 
 use std::cell::Cell;
