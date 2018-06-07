@@ -30,6 +30,10 @@ pub struct JoyCon<'a> {
     button_color: [u8; 3],
     serial_number: String,
     rumble_counter: Cell<u8>,
+
+    // Maximum Joy-Con packet size, w/ NFC/IR data
+    // Most packets won't send more than ~50 bytes
+    read_buffer: Cell<[u8; 360]>,
 }
 
 impl<'a> JoyCon<'a> {
@@ -62,6 +66,14 @@ impl<'a> JoyCon<'a> {
         Err("Couldn't find device")
     }
 
+    /// Receive an input packet, read its input report code, and handle the rest
+    /// of its data appropriately. Callers cannot access this data directly;
+    /// instead, the data is saved to the controller's state and can be read
+    /// after `handle_input()` returns.
+    pub fn handle_input(&self) -> Result<usize, &'a str> {
+        self.device.read(&mut (self.read_buffer.get())[..])
+    }
+
     fn from_device(device: HidDevice) -> Result<JoyCon, &str> {
         let serial = match device.get_serial_number_string() {
             Ok(s) => s,
@@ -74,6 +86,8 @@ impl<'a> JoyCon<'a> {
             body_color: [0x22; 3],
             button_color: [0x44; 3],
             serial_number: serial,
+
+            read_buffer: Cell::from([0; 360]),
         };
 
         let mut colors = Vec::from(&[0; 6][..]);

@@ -13,7 +13,9 @@ use std::time::{Duration, Instant};
 
 use termion::{color::*, style::{*, Reset as Clear}};
 
-use controller::{JoyCon, id::ProductId};
+use controller::JoyCon;
+use controller::hid::InputMode;
+use controller::id::ProductId;
 
 const PENDING_LEDS: [u8; 6] = [3, 5, 10, 12, 10, 5];
 const TICK: Duration = Duration::from_millis(16);
@@ -33,6 +35,7 @@ fn main() {
 
     // Print some basic device identity info
     for jc in controllers.iter() {
+        jc.set_input_mode(InputMode::Full);
         print_connected(jc);
     }
 
@@ -42,8 +45,9 @@ fn main() {
     // Show a moving LED pattern to confirm we're connected and running
     loop {
         let led_index = (start_time.elapsed().subsec_nanos() / (1_000_000_000 / 6)) as usize;
-        if led_index != old_index {
-            for jc in controllers.iter() {
+        for jc in controllers.iter() {
+            jc.handle_input();
+            if led_index != old_index {
                 if let Err(e) = jc.set_leds(PENDING_LEDS[led_index]) {
                     log::e(&format!(
                         "Failed to set LEDs on [{}]; did it disconnect?",
@@ -52,9 +56,8 @@ fn main() {
                     log::e(e);
                 }
             }
-            old_index = led_index;
         }
-        sleep(TICK);
+        old_index = led_index;
     }
     panic!("Main loop crashed. Check the logs.");
 }
