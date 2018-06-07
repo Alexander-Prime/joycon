@@ -1,13 +1,13 @@
-use self::ControllerAnalog::*;
+use self::ControllerAxis::*;
 
-pub enum ControllerAnalog {
+pub enum ControllerAxis {
     Xl,
     Yl,
     Xr,
     Yr,
 }
 
-impl ControllerAnalog {
+impl ControllerAxis {
     pub fn rawValue(&self, buf: &[u8]) -> u16 {
         match self {
             Xl | Xr => buf[0] as u16 | ((buf[1] as u16 & 0xf) << 8),

@@ -1,4 +1,4 @@
-pub mod analog;
+pub mod axis;
 pub mod button;
 pub mod hid;
 pub mod id;
