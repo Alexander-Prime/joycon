@@ -37,6 +37,8 @@ pub struct JoyCon<'a> {
 }
 
 impl<'a> JoyCon<'a> {
+    /// Constructs a new JoyCon for the first device matching the given product
+    /// ID
     pub fn find(product: ProductId) -> Result<JoyCon<'a>, &'a str> {
         match API.open(VendorId::Nintendo as u16, product as u16) {
             Ok(device) => JoyCon::from_device(device),
@@ -47,6 +49,7 @@ impl<'a> JoyCon<'a> {
         }
     }
 
+    /// Constructs a new JoyCon for the device matching the given serial number
     pub fn from_serial(serial: &str) -> Result<JoyCon<'a>, &'a str> {
         for dev in API.devices().iter() {
             match &dev.serial_number {
