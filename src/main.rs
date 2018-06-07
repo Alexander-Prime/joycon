@@ -13,7 +13,7 @@ use std::time::{Duration, Instant};
 
 use termion::{color::*, style::{*, Reset as Clear}};
 
-use controller::{JoyCon, product::Product};
+use controller::{JoyCon, id::ProductId};
 
 const PENDING_LEDS: [u8; 6] = [3, 5, 10, 12, 10, 5];
 const TICK: Duration = Duration::from_millis(16);
@@ -22,11 +22,11 @@ fn main() {
     let mut controllers = <Vec<JoyCon>>::with_capacity(2);
 
     // These can be replaced with JoyCon::from_serial() for testing
-    match JoyCon::find(Product::JoyConL) {
+    match JoyCon::find(ProductId::JoyConL) {
         Ok(jc) => controllers.push(jc),
         Err(e) => log::e(e),
     }
-    match JoyCon::find(Product::JoyConR) {
+    match JoyCon::find(ProductId::JoyConR) {
         Ok(jc) => controllers.push(jc),
         Err(e) => log::e(e),
     }

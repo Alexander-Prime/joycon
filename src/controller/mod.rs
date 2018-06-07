@@ -1,9 +1,8 @@
 pub mod analog;
 pub mod button;
-pub mod command;
-pub mod product;
+pub mod hid;
+pub mod id;
 pub mod state;
-pub mod vendor;
 
 use std::cell::Cell;
 
@@ -11,9 +10,9 @@ use hidapi::{HidApi, HidDevice};
 
 use log;
 
-use self::command::{Command::*, InputMode, Subcommand::*, NEUTRAL_RUMBLE};
-use self::product::Product;
-use self::vendor::Vendor;
+use self::id::{ProductId, VendorId};
+
+use self::hid::{InputMode, output::{Command::*, OutputReport::*, NEUTRAL_RUMBLE}};
 
 lazy_static! {
     static ref API: HidApi = match HidApi::new() {
@@ -34,8 +33,8 @@ pub struct JoyCon<'a> {
 }
 
 impl<'a> JoyCon<'a> {
-    pub fn find(product: Product) -> Result<JoyCon<'a>, &'a str> {
-        match API.open(Vendor::Nintendo as u16, product as u16) {
+    pub fn find(product: ProductId) -> Result<JoyCon<'a>, &'a str> {
+        match API.open(VendorId::Nintendo as u16, product as u16) {
             Ok(device) => JoyCon::from_device(device),
             Err(e) => {
                 log::e(e);
@@ -100,19 +99,19 @@ impl<'a> JoyCon<'a> {
 
     pub fn set_leds(&self, bitmask: u8) -> Result<usize, &str> {
         let sub = SetLeds(bitmask);
-        let cmd = DoSubcommand(self.rumble_counter.get(), &NEUTRAL_RUMBLE, sub);
+        let cmd = DoCommand(self.rumble_counter.get(), &NEUTRAL_RUMBLE, sub);
         self.device.write(&cmd.make_buffer())
     }
 
     pub fn set_input_mode(&self, mode: InputMode) -> Result<usize, &str> {
         let sub = SetInputMode(mode);
-        let cmd = DoSubcommand(self.rumble_counter.get(), &NEUTRAL_RUMBLE, sub);
+        let cmd = DoCommand(self.rumble_counter.get(), &NEUTRAL_RUMBLE, sub);
         self.device.write(&cmd.make_buffer())
     }
 
     fn read_spi(&self, addr: u32, buffer: &mut [u8]) -> Result<usize, &str> {
         let sub = ReadSpi(addr, buffer.len());
-        let cmd = DoSubcommand(self.rumble_counter.get(), &NEUTRAL_RUMBLE, sub);
+        let cmd = DoCommand(self.rumble_counter.get(), &NEUTRAL_RUMBLE, sub);
 
         let cmd_buf = cmd.make_buffer();
 
