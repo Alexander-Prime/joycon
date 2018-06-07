@@ -59,7 +59,6 @@ fn main() {
         }
         old_index = led_index;
     }
-    panic!("Main loop crashed. Check the logs.");
 }
 
 fn print_connected(joycon: &JoyCon) {
