@@ -8,6 +8,10 @@ pub struct ControllerState {
 }
 
 impl ControllerState {
+    pub fn new() -> ControllerState {
+        ControllerState { buffer: [0; 10] }
+    }
+
     pub fn button(&self, btn: Button) -> bool {
         self.buffer[btn.byteOffset()] & btn.bitMask() > 0
     }

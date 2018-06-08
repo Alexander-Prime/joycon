@@ -8,10 +8,7 @@ mod controller;
 mod endian;
 mod log;
 
-use std::thread::sleep;
 use std::time::{Duration, Instant};
-
-use termion::{color::*, style::{*, Reset as Clear}};
 
 use controller::JoyCon;
 use controller::hid::InputMode;
@@ -34,9 +31,9 @@ fn main() {
     }
 
     // Print some basic device identity info
-    for jc in controllers.iter() {
-        jc.set_input_mode(InputMode::Full);
-        print_connected(jc);
+    for jc in controllers.iter_mut() {
+        println!("Connected to {}", jc.identify());
+        jc.set_input_mode(InputMode::Full).expect("");
     }
 
     let mut old_index: usize = 0;
@@ -45,7 +42,7 @@ fn main() {
     // Show a moving LED pattern to confirm we're connected and running
     loop {
         let led_index = (start_time.elapsed().subsec_nanos() / (1_000_000_000 / 6)) as usize;
-        for jc in controllers.iter() {
+        for jc in controllers.iter_mut() {
             jc.handle_input();
             if led_index != old_index {
                 if let Err(e) = jc.set_leds(PENDING_LEDS[led_index]) {
@@ -59,17 +56,4 @@ fn main() {
         }
         old_index = led_index;
     }
-}
-
-fn print_connected(joycon: &JoyCon) {
-    let [bdy_r, bdy_g, bdy_b] = joycon.body_color();
-    let [btn_r, btn_g, btn_b] = joycon.button_color();
-    log::i(&format!(
-        "Connected to {}{}{} Joy-Con(L) [{}] {}",
-        Fg(Rgb(btn_r, btn_g, btn_b)),
-        Bg(Rgb(bdy_r, bdy_g, bdy_b)),
-        Bold,
-        joycon.serial_number(),
-        Clear
-    ));
 }
