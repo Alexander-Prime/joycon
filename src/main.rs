@@ -8,14 +8,17 @@ mod controller;
 mod endian;
 mod log;
 
-use std::time::{Duration, Instant};
+use std::time::Instant;
 
 use controller::JoyCon;
 use controller::hid::InputMode;
 use controller::id::ProductId;
 
-const PENDING_LEDS: [u8; 6] = [3, 5, 10, 12, 10, 5];
-const TICK: Duration = Duration::from_millis(16);
+const PENDING_LEDS: [u8; 64] = [
+    4, 14, 11, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+    0, 2, 7, 13, 8, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+    0, 0,
+];
 
 fn main() {
     let mut controllers = <Vec<JoyCon>>::with_capacity(2);
@@ -41,15 +44,13 @@ fn main() {
 
     // Show a moving LED pattern to confirm we're connected and running
     loop {
-        let led_index = (start_time.elapsed().subsec_nanos() / (1_000_000_000 / 6)) as usize;
+        let led_index = (start_time.elapsed().subsec_nanos() / (1_000_000_000 / 1)) as usize;
         for jc in controllers.iter_mut() {
-            jc.handle_input();
+            if let Err(e) = jc.handle_input() {
+                log::e(e);
+            }
             if led_index != old_index {
                 if let Err(e) = jc.set_leds(PENDING_LEDS[led_index]) {
-                    log::e(&format!(
-                        "Failed to set LEDs on [{}]; did it disconnect?",
-                        jc.serial_number(),
-                    ));
                     log::e(e);
                 }
             }

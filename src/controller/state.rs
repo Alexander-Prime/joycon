@@ -21,7 +21,7 @@ impl ControllerState {
             Axis::Xl | Axis::Yl => 6..8,
             Axis::Xr | Axis::Yr => 9..11,
         };
-        axis.rawValue(&self.buffer[range])
+        axis.raw_value(&self.buffer[range])
     }
 }
 

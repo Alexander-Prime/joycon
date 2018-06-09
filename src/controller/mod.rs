@@ -102,11 +102,14 @@ impl<'a> JoyCon<'a> {
 
     /// Creates a string representing the current input status, formatted with
     /// the device's physical colors
-    pub fn input_str(&self) -> &str {
+    pub fn input_str(&self) -> String {
         let (bdy_r, bdy_g, bdy_b) = self.body_color();
         let (btn_r, btn_g, btn_b) = self.button_color();
-        // format!(" {}< {}v {}^ {}> "); // Left, down, up right (for now)
-        ""
+        String::from(format!(
+            "({:04x},{:04x})", // Left, down, up right (for now)
+            self.state.axis(Axis::Xr),
+            self.state.axis(Axis::Yr),
+        ))
     }
 
     fn button_state_color(&self, btn: Button) -> (u8, u8, u8) {
@@ -162,10 +165,12 @@ impl<'a> JoyCon<'a> {
         &self.serial_number
     }
 
-    pub fn set_leds(&self, bitmask: u8) -> Result<usize, &str> {
+    pub fn set_leds(&mut self, bitmask: u8) -> Result<usize, &str> {
         let sub = SetLeds(bitmask);
         let cmd = DoCommand(self.rumble_counter.get(), &NEUTRAL_RUMBLE, sub);
-        self.device.write(&cmd.make_buffer())
+        self.device
+            .write(&cmd.make_buffer())
+            .and(self.handle_input())
     }
 
     pub fn set_input_mode(&mut self, mode: InputMode) -> Result<usize, &str> {
@@ -173,7 +178,7 @@ impl<'a> JoyCon<'a> {
         let cmd = DoCommand(self.rumble_counter.get(), &NEUTRAL_RUMBLE, sub);
         self.device
             .write(&cmd.make_buffer())
-            .and_then(|c| self.handle_input())
+            .and(self.handle_input())
     }
 
     fn read_spi(&self, addr: u32, buffer: &mut [u8]) -> Result<usize, &str> {
