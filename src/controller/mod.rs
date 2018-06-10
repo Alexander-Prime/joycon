@@ -2,22 +2,23 @@ pub mod axis;
 pub mod button;
 pub mod hid;
 pub mod id;
-pub mod state;
+pub mod motion;
 
 use std::cell::Cell;
 
 use hidapi::{HidApi, HidDevice};
 use termion::{color::*, style::{*, Reset as Clear}};
 
+use has::Has;
 use log;
 
-use self::id::{ProductId, VendorId};
-
-use self::axis::ControllerAxis as Axis;
-use self::button::ControllerButton as Button;
+use self::axis::{ControllerAxis as Axis, StickFrame};
+use self::button::{ButtonFrame, ControllerButton as Button};
 use self::hid::InputMode;
+use self::hid::input::{InputReport, ResponseData, SpiChunk};
 use self::hid::output::{Command::*, OutputReport::*, NEUTRAL_RUMBLE};
-use self::state::ControllerState;
+use self::id::{ProductId, VendorId};
+use self::motion::MotionFrame;
 
 lazy_static! {
     static ref API: HidApi = match HidApi::new() {
@@ -40,7 +41,7 @@ pub struct JoyCon<'a> {
     // Most packets won't send more than ~50 bytes
     read_buffer: [u8; 360],
 
-    state: ControllerState,
+    latest_frame: InputFrame,
 }
 
 impl<'a> JoyCon<'a> {
@@ -81,7 +82,41 @@ impl<'a> JoyCon<'a> {
     /// instead, the data is saved to the controller's state and can be read
     /// after `handle_input()` returns.
     pub fn handle_input(&mut self) -> Result<usize, &'a str> {
-        self.device.read(&mut self.read_buffer[..])
+        self.device.read(&mut self.read_buffer[..]);
+        let report = InputReport::from(&self.read_buffer[..]);
+        match report {
+            InputReport::CommandResponse {
+                battery,
+                buttons,
+                left_stick,
+                right_stick,
+                data,
+            } => {
+                self.latest_frame.buttons = buttons;
+                self.latest_frame.left_stick = left_stick;
+                self.latest_frame.right_stick = right_stick;
+                self.handle_response(data);
+            }
+            _ => {}
+        }
+        Ok(1)
+    }
+
+    fn handle_response(&mut self, data: ResponseData) {
+        match data {
+            ResponseData::ReadSpi(chunk) => self.save_spi_chunk(chunk),
+            ResponseData::Unknown(code) => {
+                log::e(&format!("Received unknown response code {}", code))
+            }
+        }
+    }
+
+    fn save_spi_chunk(&mut self, chunk: SpiChunk) {
+        match chunk {
+            SpiChunk::BodyColor(r, g, b) => self.body_color = (r, g, b),
+            SpiChunk::ButtonColor(r, g, b) => self.button_color = (r, g, b),
+            SpiChunk::Unknown => {}
+        }
     }
 
     /// Creates a string identifying this device, including its name and serial
@@ -107,13 +142,13 @@ impl<'a> JoyCon<'a> {
         let (btn_r, btn_g, btn_b) = self.button_color();
         String::from(format!(
             "({:04x},{:04x})", // Left, down, up right (for now)
-            self.state.axis(Axis::Xr),
-            self.state.axis(Axis::Yr),
+            self.latest_frame.right_stick.x,
+            self.latest_frame.right_stick.y,
         ))
     }
 
     fn button_state_color(&self, btn: Button) -> (u8, u8, u8) {
-        if self.state.button(btn) {
+        if self.latest_frame.buttons.has(btn) {
             (0, 0xff, 0)
         } else {
             self.button_color()
@@ -130,7 +165,7 @@ impl<'a> JoyCon<'a> {
             Err(e) => return Err(e),
         };
 
-        let mut jc = JoyCon {
+        let jc = JoyCon {
             device: device,
             rumble_counter: Cell::new(0),
             body_color: (0x22, 0x22, 0x22),
@@ -139,16 +174,12 @@ impl<'a> JoyCon<'a> {
 
             read_buffer: [0; 360],
 
-            state: ControllerState::new(),
+            latest_frame: InputFrame::new(),
         };
 
         jc.set_input_mode(InputMode::Simple);
-
-        let mut colors = Vec::from(&[0; 6][..]);
-        jc.read_spi(0x6050, &mut colors[..]).unwrap();
-
-        jc.body_color = (colors[0], colors[1], colors[2]);
-        jc.button_color = (colors[3], colors[4], colors[5]);
+        jc.read_spi(0x6050, 3);
+        jc.read_spi(0x6053, 3);
 
         Ok(jc)
     }
@@ -165,46 +196,39 @@ impl<'a> JoyCon<'a> {
         &self.serial_number
     }
 
-    pub fn set_leds(&mut self, bitmask: u8) -> Result<usize, &str> {
+    pub fn set_leds(&self, bitmask: u8) -> Result<usize, &str> {
         let sub = SetLeds(bitmask);
         let cmd = DoCommand(self.rumble_counter.get(), &NEUTRAL_RUMBLE, sub);
-        self.device
-            .write(&cmd.make_buffer())
-            .and(self.handle_input())
+        self.device.write(&<Vec<u8>>::from(cmd)[..])
     }
 
-    pub fn set_input_mode(&mut self, mode: InputMode) -> Result<usize, &str> {
+    pub fn set_input_mode(&self, mode: InputMode) -> Result<usize, &str> {
         let sub = SetInputMode(mode);
         let cmd = DoCommand(self.rumble_counter.get(), &NEUTRAL_RUMBLE, sub);
-        self.device
-            .write(&cmd.make_buffer())
-            .and(self.handle_input())
+        self.device.write(&<Vec<u8>>::from(cmd))
     }
 
-    fn read_spi(&self, addr: u32, buffer: &mut [u8]) -> Result<usize, &str> {
-        let sub = ReadSpi(addr, buffer.len());
+    fn read_spi(&self, addr: u32, length: usize) -> Result<usize, &str> {
+        let sub = ReadSpi(addr, length);
         let cmd = DoCommand(self.rumble_counter.get(), &NEUTRAL_RUMBLE, sub);
+        self.device.write(&<Vec<u8>>::from(cmd))
+    }
+}
 
-        let cmd_buf = cmd.make_buffer();
+pub struct InputFrame {
+    buttons: ButtonFrame,
+    left_stick: StickFrame,
+    right_stick: StickFrame,
+    motion: MotionFrame,
+}
 
-        let result = self.device.write(&cmd_buf);
-        if let Err(_) = result {
-            return result;
+impl InputFrame {
+    fn new() -> InputFrame {
+        InputFrame {
+            buttons: ButtonFrame::new(),
+            left_stick: StickFrame::new(),
+            right_stick: StickFrame::new(),
+            motion: MotionFrame::new(),
         }
-
-        let mut response = Vec::new();
-        // 4 extra response bytes
-        response.resize(4 + cmd_buf.len() + buffer.len(), 0);
-        let result = self.device.read(response.as_mut_slice());
-        if let Err(_) = result {
-            return result;
-        }
-
-        let start = response.len() - buffer.len();
-        buffer.copy_from_slice(&response[start..]);
-
-        log::i(&format!("read_spi @ 0x{:04x}: {}", addr, log::buf(&buffer)));
-
-        result
     }
 }

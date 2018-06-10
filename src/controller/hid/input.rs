@@ -32,40 +32,40 @@ impl<'a> From<&'a [u8]> for InputReport {
         match buf[0] {
             0x21 => CommandResponse {
                 battery: buf[1] >> 1,
-                buttons: ButtonFrame::from(&buf[2..4]),
-                left_stick: StickFrame::from(&buf[5..7]),
-                right_stick: StickFrame::from(&buf[8..10]),
+                buttons: ButtonFrame::from(&buf[2..5]),
+                left_stick: StickFrame::from(&buf[5..8]),
+                right_stick: StickFrame::from(&buf[8..11]),
                 data: ResponseData::from(&buf[12..48]),
             },
             0x30 | 0x31 | 0x32 | 0x33 => ExtendedInput {
                 battery: buf[1] >> 1,
-                buttons: ButtonFrame::from(&buf[2..4]),
-                left_stick: StickFrame::from(&buf[5..7]),
-                right_stick: StickFrame::from(&buf[8..10]),
+                buttons: ButtonFrame::from(&buf[2..5]),
+                left_stick: StickFrame::from(&buf[5..8]),
+                right_stick: StickFrame::from(&buf[8..11]),
                 // TODO We actually get 3 motion frames here, should probably average them
-                motion: MotionFrame::from(&buf[11..22]),
+                motion: MotionFrame::from(&buf[11..23]),
             },
-            0x3f => SimpleInput(LittleEndian::read_u16(&buf[1..2]), buf[3]),
+            0x3f => SimpleInput(LittleEndian::read_u16(&buf[1..4]), buf[3]),
             _ => Unknown,
         }
     }
 }
 
-enum ResponseData {
+pub enum ResponseData {
     ReadSpi(SpiChunk),
-    Unknown,
+    Unknown(u8),
 }
 
 impl<'a> From<&'a [u8]> for ResponseData {
     fn from(buf: &[u8]) -> ResponseData {
         match buf[0] {
             0x10 => ResponseData::ReadSpi(SpiChunk::from(&buf[1..])),
-            _ => ResponseData::Unknown,
+            _ => ResponseData::Unknown(buf[0]),
         }
     }
 }
 
-enum SpiChunk {
+pub enum SpiChunk {
     BodyColor(u8, u8, u8),
     ButtonColor(u8, u8, u8),
     Unknown,

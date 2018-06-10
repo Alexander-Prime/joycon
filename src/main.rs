@@ -35,9 +35,11 @@ fn main() {
     }
 
     // Print some basic device identity info
-    for jc in controllers.iter_mut() {
+    for jc in controllers.iter() {
         println!("Connected to {}", jc.identify());
-        jc.set_input_mode(InputMode::Full).expect("");
+        if let Err(e) = jc.set_input_mode(InputMode::Full) {
+            log::e(e);
+        }
     }
 
     let mut old_index: usize = 0;
@@ -47,13 +49,17 @@ fn main() {
     loop {
         let led_index = (start_time.elapsed().subsec_nanos() / (1_000_000_000 / 1)) as usize;
         for jc in controllers.iter_mut() {
-            if let Err(e) = jc.handle_input() {
+            if let Err(e) = match jc.handle_input() {
+                Ok(_) => if led_index != old_index {
+                    jc.set_leds(PENDING_LEDS[led_index])
+                } else {
+                    Ok(1)
+                },
+                Err(e) => Err(e),
+            } {
                 log::e(e);
-            }
-            if led_index != old_index {
-                if let Err(e) = jc.set_leds(PENDING_LEDS[led_index]) {
-                    log::e(e);
-                }
+            } else {
+                log::d(&jc.input_str());
             }
         }
         old_index = led_index;

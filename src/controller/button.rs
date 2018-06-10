@@ -110,6 +110,37 @@ impl<'a> From<&'a [u8]> for ButtonFrame {
     }
 }
 
+impl ButtonFrame {
+    pub fn new() -> ButtonFrame {
+        ButtonFrame {
+            y: false,
+            x: false,
+            b: false,
+            a: false,
+            right_sr: false,
+            right_sl: false,
+            r: false,
+            zr: false,
+
+            minus: false,
+            plus: false,
+            cr: false,
+            cl: false,
+            home: false,
+            capture: false,
+
+            down: false,
+            up: false,
+            right: false,
+            left: false,
+            left_sr: false,
+            left_sl: false,
+            l: false,
+            zl: false,
+        }
+    }
+}
+
 impl<'a> Has<ControllerButton> for ButtonFrame {
     fn has(&self, btn: ControllerButton) -> bool {
         match btn {

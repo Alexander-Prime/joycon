@@ -13,8 +13,8 @@ pub enum ControllerAxis {
 }
 
 pub struct StickFrame {
-    x: u16,
-    y: u16,
+    pub x: u16,
+    pub y: u16,
 }
 
 impl<'a> From<&'a [u8]> for StickFrame {
@@ -27,6 +27,14 @@ impl<'a> From<&'a [u8]> for StickFrame {
 }
 
 impl StickFrame {
+    pub fn new() -> StickFrame {
+        StickFrame {
+            // 12 bits each
+            x: 0x800,
+            y: 0x800,
+        }
+    }
+
     fn get(&self, axis: Axis) -> u16 {
         match axis {
             X => self.x,
