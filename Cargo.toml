@@ -7,3 +7,4 @@ authors = ["Alexander Peters <rainesabaal@gmail.com>"]
 hidapi = { git = "https://github.com/drola/hidapi-rs.git", branch = "linux-native-driver", features = ["linux-hidraw"]}
 termion = "*"
 lazy_static = "1.0.1"
+byteorder = "1"
