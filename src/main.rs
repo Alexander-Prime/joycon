@@ -1,11 +1,12 @@
 #[macro_use]
 extern crate lazy_static;
+extern crate byteorder;
 
 extern crate hidapi;
 extern crate termion;
 
 mod controller;
-mod endian;
+mod has;
 mod log;
 
 use std::time::Instant;
