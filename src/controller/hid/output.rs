@@ -1,5 +1,7 @@
 use byteorder::{ByteOrder, LittleEndian};
 
+use log;
+
 use super::InputMode;
 
 use self::Command::*;
@@ -103,6 +105,7 @@ impl<'a> From<Command> for Vec<u8> {
             _ => {}
         }
 
+        log::d(&format!("sending command {}", log::buf(&buf)));
         buf
     }
 }

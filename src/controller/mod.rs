@@ -82,11 +82,16 @@ impl<'a> JoyCon<'a> {
     /// instead, the data is saved to the controller's state and can be read
     /// after `handle_input()` returns.
     pub fn handle_input(&mut self) -> Result<usize, &'a str> {
-        self.device.read(&mut self.read_buffer[..]);
-        let report = InputReport::from(&self.read_buffer[..]);
+        let mut buf = self.read_buffer;
+        if let Err(e) = self.device.read(&mut buf[..]) {
+            log::e(e);
+        }
+        log::d(&log::buf(&buf[..]));
+
+        let report = InputReport::from(&buf[..]);
         match report {
             InputReport::CommandResponse {
-                battery,
+                battery: _,
                 buttons,
                 left_stick,
                 right_stick,
@@ -105,8 +110,12 @@ impl<'a> JoyCon<'a> {
     fn handle_response(&mut self, data: ResponseData) {
         match data {
             ResponseData::ReadSpi(chunk) => self.save_spi_chunk(chunk),
-            ResponseData::Unknown(code) => {
-                log::e(&format!("Received unknown response code {}", code))
+            ResponseData::Unknown(buf) => {
+                log::e(&format!(
+                    "Received unknown response ACK {}",
+                    log::buf(&buf[..2])
+                ));
+                log::e(&log::buf(buf))
             }
         }
     }
@@ -115,7 +124,10 @@ impl<'a> JoyCon<'a> {
         match chunk {
             SpiChunk::BodyColor(r, g, b) => self.body_color = (r, g, b),
             SpiChunk::ButtonColor(r, g, b) => self.button_color = (r, g, b),
-            SpiChunk::Unknown => {}
+            SpiChunk::Unknown(addr, len) => log::e(&format!(
+                "Read unknown SPI data, {} bytes at 0x{:04x}",
+                len, addr
+            )),
         }
     }
 
