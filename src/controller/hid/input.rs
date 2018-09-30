@@ -71,17 +71,18 @@ impl<'a> From<&'a [u8]> for ResponseData<'a> {
 pub enum SpiChunk {
     BodyColor(u8, u8, u8),
     ButtonColor(u8, u8, u8),
-    Unknown(u16, u8),
+    Unknown(u16, usize),
 }
 
 impl<'a> From<&'a [u8]> for SpiChunk {
     fn from(buf: &'a [u8]) -> SpiChunk {
-        // Byte 2 is the size; not used for now
-        let addr = LittleEndian::read_u16(&buf[..2]);
+        let addr = LittleEndian::read_u16(&buf[..4]);
+        let size = usize::from(buf[4]);
+        let buf = &buf[5..5 + size];
         match addr {
-            0x6050 => SpiChunk::BodyColor(buf[3], buf[4], buf[5]),
-            0x6053 => SpiChunk::ButtonColor(buf[3], buf[4], buf[5]),
-            _ => SpiChunk::Unknown(addr, buf[2]),
+            0x6050 => SpiChunk::BodyColor(buf[0], buf[1], buf[2]),
+            0x6053 => SpiChunk::ButtonColor(buf[0], buf[1], buf[2]),
+            _ => SpiChunk::Unknown(addr, size),
         }
     }
 }
