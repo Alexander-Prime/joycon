@@ -38,6 +38,7 @@ pub struct JoyCon<'a> {
     button_color: (u8, u8, u8),
     serial_number: String,
     rumble_counter: Cell<u8>,
+    leds: u8,
 
     // Maximum Joy-Con packet size, w/ NFC/IR data
     // Most packets won't send more than ~50 bytes
@@ -78,6 +79,36 @@ impl<'a> JoyCon<'a> {
         Err("Couldn't find device")
     }
 
+    fn from_device(device: HidDevice) -> Result<JoyCon, &str> {
+        let serial = match device.get_serial_number_string() {
+            Ok(s) => s,
+            Err(e) => return Err(e),
+        };
+
+        if let Err(e) = device.set_blocking_mode(false) {
+            return Err(e);
+        }
+
+        let mut jc = JoyCon {
+            device: device,
+            rumble_counter: Cell::new(0),
+            body_color: (0x22, 0x22, 0x22),
+            button_color: (0x44, 0x44, 0x44),
+            serial_number: serial,
+            leds: 0x00,
+
+            read_buffer: [0; 360],
+
+            latest_frame: InputFrame::new(),
+        };
+
+        jc.set_input_mode(InputMode::Simple);
+        jc.read_spi(0x6050, 3);
+        jc.read_spi(0x6053, 3);
+
+        Ok(jc)
+    }
+
     /// Receive an input packet, read its input report code, and handle the rest
     /// of its data appropriately. Callers cannot access this data directly;
     /// instead, the data is saved to the controller's state and can be read
@@ -86,7 +117,7 @@ impl<'a> JoyCon<'a> {
         let mut buf = self.read_buffer;
 
         if let Err(e) = self.device.read(&mut buf[..]) {
-            log::e(e);
+            return Err(e);
         }
 
         let report = InputReport::from(&buf[..]);
@@ -103,16 +134,14 @@ impl<'a> JoyCon<'a> {
                 self.latest_frame.right_stick = right_stick;
                 self.handle_response(data);
             }
-            _ => {}
+            _ => (),
         }
         Ok(1)
     }
 
     fn handle_response(&mut self, data: ResponseData) {
         match data {
-            ResponseData::SetInputMode => (),
             ResponseData::ReadSpi(chunk) => self.save_spi_chunk(chunk),
-            ResponseData::SetLeds => (),
             ResponseData::Unknown(buf) => {
                 log::e(&format!(
                     "Received unknown response ACK {}",
@@ -120,6 +149,7 @@ impl<'a> JoyCon<'a> {
                 ));
                 log::e(&log::buf(buf))
             }
+            _ => (),
         }
     }
 
@@ -178,31 +208,6 @@ impl<'a> JoyCon<'a> {
         (0, 0, 0)
     }
 
-    fn from_device(device: HidDevice) -> Result<JoyCon, &str> {
-        let serial = match device.get_serial_number_string() {
-            Ok(s) => s,
-            Err(e) => return Err(e),
-        };
-
-        let mut jc = JoyCon {
-            device: device,
-            rumble_counter: Cell::new(0),
-            body_color: (0x22, 0x22, 0x22),
-            button_color: (0x44, 0x44, 0x44),
-            serial_number: serial,
-
-            read_buffer: [0; 360],
-
-            latest_frame: InputFrame::new(),
-        };
-
-        jc.set_input_mode(InputMode::Simple);
-        jc.read_spi(0x6050, 3);
-        jc.read_spi(0x6053, 3);
-
-        Ok(jc)
-    }
-
     pub fn body_color(&self) -> (u8, u8, u8) {
         self.body_color
     }
@@ -216,25 +221,26 @@ impl<'a> JoyCon<'a> {
     }
 
     pub fn set_leds(&mut self, bitmask: u8) -> Result<usize, &str> {
+        if bitmask == self.leds {
+            return Ok(0);
+        }
+        self.leds = bitmask;
         let sub = SetLeds(bitmask);
         let cmd = DoCommand(self.rumble_counter.get(), &NEUTRAL_RUMBLE, sub);
-        self.device.write(&<Vec<u8>>::from(cmd)[..]);
-        self.handle_input()
+        self.device.write(&<Vec<u8>>::from(cmd)[..])
     }
 
     pub fn set_input_mode(&mut self, mode: InputMode) -> Result<usize, &str> {
         let sub = SetInputMode(mode);
         let cmd = DoCommand(self.rumble_counter.get(), &NEUTRAL_RUMBLE, sub);
-        self.device.write(&<Vec<u8>>::from(cmd));
-        self.handle_input()
+        self.device.write(&<Vec<u8>>::from(cmd))
     }
 
     fn read_spi(&mut self, addr: u32, length: usize) -> Result<usize, &str> {
         let sub = ReadSpi(addr, length);
         let cmd = DoCommand(self.rumble_counter.get(), &NEUTRAL_RUMBLE, sub);
         let buf = &<Vec<u8>>::from(cmd);
-        self.device.write(buf);
-        self.handle_input()
+        self.device.write(buf)
     }
 }
 

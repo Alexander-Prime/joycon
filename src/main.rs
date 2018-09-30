@@ -42,28 +42,25 @@ fn main() {
         }
     }
 
-    let mut old_index: usize = 0;
     let start_time = Instant::now();
 
     // Show a moving LED pattern to confirm we're connected and running
     loop {
-        let led_index = (start_time.elapsed().subsec_nanos() / (1_000_000_000 / 1)) as usize;
+        let led_index = (start_time.elapsed().subsec_nanos() / (1_000_000_000 / 64)) as usize;
+        log::d(&format!("LEDS: {}", led_index));
 
         for jc in controllers.iter_mut() {
-            let result = match jc.handle_input() {
-                Ok(_) => if led_index != old_index {
-                    jc.set_leds(PENDING_LEDS[led_index])
-                } else {
-                    Ok(1)
-                },
-                Err(e) => Err(e),
-            };
+            log::d(&jc.identify());
+            log::d("LEDs");
+
+            if let Err(e) = jc.set_leds(PENDING_LEDS[led_index]) {
+                log::e(e);
+            }
+
+            log::d("Input");
+            if let Err(e) = jc.handle_input() {
+                log::e(e);
+            }
         }
-
-        // for jc in controllers.iter() {
-        //     jc.set_leds(PENDING_LEDS[led_index]);
-        // }
-
-        old_index = led_index;
     }
 }
