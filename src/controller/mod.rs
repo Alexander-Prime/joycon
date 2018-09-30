@@ -110,8 +110,9 @@ impl<'a> JoyCon<'a> {
 
     fn handle_response(&mut self, data: ResponseData) {
         match data {
-            ResponseData::SetInputMode() => {}
+            ResponseData::SetInputMode => (),
             ResponseData::ReadSpi(chunk) => self.save_spi_chunk(chunk),
+            ResponseData::SetLeds => (),
             ResponseData::Unknown(buf) => {
                 log::e(&format!(
                     "Received unknown response ACK {}",

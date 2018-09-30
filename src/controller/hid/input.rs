@@ -53,16 +53,18 @@ impl<'a> From<&'a [u8]> for InputReport<'a> {
 }
 
 pub enum ResponseData<'a> {
-    SetInputMode(/* No response data */),
+    SetInputMode,
     ReadSpi(SpiChunk),
+    SetLeds,
     Unknown(&'a [u8]),
 }
 
 impl<'a> From<&'a [u8]> for ResponseData<'a> {
     fn from(buf: &[u8]) -> ResponseData {
         match buf[1] {
-            0x03 => ResponseData::SetInputMode(),
+            0x03 => ResponseData::SetInputMode,
             0x10 => ResponseData::ReadSpi(SpiChunk::from(&buf[2..])),
+            0x30 => ResponseData::SetLeds,
             _ => ResponseData::Unknown(&buf[..]),
         }
     }
