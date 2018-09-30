@@ -11,9 +11,9 @@ mod log;
 
 use std::time::Instant;
 
-use controller::JoyCon;
 use controller::hid::InputMode;
 use controller::id::ProductId;
+use controller::JoyCon;
 
 const PENDING_LEDS: [u8; 64] = [
     4, 14, 11, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
@@ -35,7 +35,7 @@ fn main() {
     }
 
     // Print some basic device identity info
-    for jc in controllers.iter() {
+    for jc in controllers.iter_mut() {
         println!("Connected to {}", jc.identify());
         if let Err(e) = jc.set_input_mode(InputMode::Full) {
             log::e(e);
@@ -48,20 +48,22 @@ fn main() {
     // Show a moving LED pattern to confirm we're connected and running
     loop {
         let led_index = (start_time.elapsed().subsec_nanos() / (1_000_000_000 / 1)) as usize;
+
         for jc in controllers.iter_mut() {
-            if let Err(e) = match jc.handle_input() {
+            let result = match jc.handle_input() {
                 Ok(_) => if led_index != old_index {
                     jc.set_leds(PENDING_LEDS[led_index])
                 } else {
                     Ok(1)
                 },
                 Err(e) => Err(e),
-            } {
-                log::e(e);
-            } else {
-                log::d(&jc.input_str());
-            }
+            };
         }
+
+        // for jc in controllers.iter() {
+        //     jc.set_leds(PENDING_LEDS[led_index]);
+        // }
+
         old_index = led_index;
     }
 }

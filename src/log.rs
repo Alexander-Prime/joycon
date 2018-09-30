@@ -1,6 +1,8 @@
 use std::time::{Duration, Instant};
 
-use termion::{color::*, style::{*, Reset as Clear}};
+use termion::{
+    color::*, style::{Reset as Clear, *},
+};
 
 static mut START_TIME: Option<Instant> = None;
 

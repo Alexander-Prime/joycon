@@ -7,16 +7,18 @@ pub mod motion;
 use std::cell::Cell;
 
 use hidapi::{HidApi, HidDevice};
-use termion::{color::*, style::{*, Reset as Clear}};
+use termion::{
+    color::*, style::{Reset as Clear, *},
+};
 
 use has::Has;
 use log;
 
 use self::axis::{ControllerAxis as Axis, StickFrame};
 use self::button::{ButtonFrame, ControllerButton as Button};
-use self::hid::InputMode;
 use self::hid::input::{InputReport, ResponseData, SpiChunk};
 use self::hid::output::{Command::*, OutputReport::*, NEUTRAL_RUMBLE};
+use self::hid::InputMode;
 use self::id::{ProductId, VendorId};
 use self::motion::MotionFrame;
 
@@ -45,8 +47,7 @@ pub struct JoyCon<'a> {
 }
 
 impl<'a> JoyCon<'a> {
-    /// Constructs a new JoyCon for the first device matching the given product
-    /// ID
+    /// Constructs a new JoyCon for the first device matching the given product ID
     pub fn find(product: ProductId) -> Result<JoyCon<'a>, &'a str> {
         match API.open(VendorId::Nintendo as u16, product as u16) {
             Ok(device) => JoyCon::from_device(device),
@@ -83,10 +84,10 @@ impl<'a> JoyCon<'a> {
     /// after `handle_input()` returns.
     pub fn handle_input(&mut self) -> Result<usize, &'a str> {
         let mut buf = self.read_buffer;
+
         if let Err(e) = self.device.read(&mut buf[..]) {
             log::e(e);
         }
-        log::d(&log::buf(&buf[..]));
 
         let report = InputReport::from(&buf[..]);
         match report {
@@ -109,6 +110,7 @@ impl<'a> JoyCon<'a> {
 
     fn handle_response(&mut self, data: ResponseData) {
         match data {
+            ResponseData::SetInputMode() => {}
             ResponseData::ReadSpi(chunk) => self.save_spi_chunk(chunk),
             ResponseData::Unknown(buf) => {
                 log::e(&format!(
@@ -122,8 +124,12 @@ impl<'a> JoyCon<'a> {
 
     fn save_spi_chunk(&mut self, chunk: SpiChunk) {
         match chunk {
-            SpiChunk::BodyColor(r, g, b) => self.body_color = (r, g, b),
-            SpiChunk::ButtonColor(r, g, b) => self.button_color = (r, g, b),
+            SpiChunk::BodyColor(r, g, b) => {
+                self.body_color = (r, g, b);
+            }
+            SpiChunk::ButtonColor(r, g, b) => {
+                self.button_color = (r, g, b);
+            }
             SpiChunk::Unknown(addr, len) => log::e(&format!(
                 "Read unknown SPI data, {} bytes at 0x{:04x}",
                 len, addr
@@ -177,7 +183,7 @@ impl<'a> JoyCon<'a> {
             Err(e) => return Err(e),
         };
 
-        let jc = JoyCon {
+        let mut jc = JoyCon {
             device: device,
             rumble_counter: Cell::new(0),
             body_color: (0x22, 0x22, 0x22),
@@ -208,22 +214,26 @@ impl<'a> JoyCon<'a> {
         &self.serial_number
     }
 
-    pub fn set_leds(&self, bitmask: u8) -> Result<usize, &str> {
+    pub fn set_leds(&mut self, bitmask: u8) -> Result<usize, &str> {
         let sub = SetLeds(bitmask);
         let cmd = DoCommand(self.rumble_counter.get(), &NEUTRAL_RUMBLE, sub);
-        self.device.write(&<Vec<u8>>::from(cmd)[..])
+        self.device.write(&<Vec<u8>>::from(cmd)[..]);
+        self.handle_input()
     }
 
-    pub fn set_input_mode(&self, mode: InputMode) -> Result<usize, &str> {
+    pub fn set_input_mode(&mut self, mode: InputMode) -> Result<usize, &str> {
         let sub = SetInputMode(mode);
         let cmd = DoCommand(self.rumble_counter.get(), &NEUTRAL_RUMBLE, sub);
-        self.device.write(&<Vec<u8>>::from(cmd))
+        self.device.write(&<Vec<u8>>::from(cmd));
+        self.handle_input()
     }
 
-    fn read_spi(&self, addr: u32, length: usize) -> Result<usize, &str> {
+    fn read_spi(&mut self, addr: u32, length: usize) -> Result<usize, &str> {
         let sub = ReadSpi(addr, length);
         let cmd = DoCommand(self.rumble_counter.get(), &NEUTRAL_RUMBLE, sub);
-        self.device.write(&<Vec<u8>>::from(cmd))
+        let buf = &<Vec<u8>>::from(cmd);
+        self.device.write(buf);
+        self.handle_input()
     }
 }
 
