@@ -109,16 +109,31 @@ impl<'a> JoyCon<'a> {
         Ok(jc)
     }
 
+    /// Read and handle all buffered inputs. Blocks until the queue is emptied.
+    /// On success, returns `Ok(len)`, where `len` is the number of inputs that were flushed.
+    pub fn flush(&mut self) -> Result<usize, &'a str> {
+        let mut count = 0;
+        loop {
+            match self.handle_input() {
+                Ok(None) => return Ok(count),
+                Err(e) => return Err(e),
+                _ => count += 1,
+            }
+        }
+    }
+
     /// Receive an input packet, read its input report code, and handle the rest
     /// of its data appropriately. Callers cannot access this data directly;
     /// instead, the data is saved to the controller's state and can be read
     /// after `handle_input()` returns.
-    pub fn handle_input(&mut self) -> Result<usize, &'a str> {
+    fn handle_input(&mut self) -> Result<Option<usize>, &'a str> {
         let mut buf = self.read_buffer;
 
-        if let Err(e) = self.device.read(&mut buf[..]) {
-            return Err(e);
-        }
+        let len = match self.device.read(&mut buf[..]) {
+            Ok(0) => return Ok(None),
+            Err(e) => return Err(e),
+            Ok(len) => len,
+        };
 
         let report = InputReport::from(&buf[..]);
         match report {
@@ -136,7 +151,7 @@ impl<'a> JoyCon<'a> {
             }
             _ => (),
         }
-        Ok(1)
+        Ok(Some(len))
     }
 
     fn handle_response(&mut self, data: ResponseData) {

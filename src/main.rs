@@ -15,11 +15,7 @@ use controller::hid::InputMode;
 use controller::id::ProductId;
 use controller::JoyCon;
 
-const PENDING_LEDS: [u8; 64] = [
-    4, 14, 11, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-    0, 2, 7, 13, 8, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-    0, 0,
-];
+const PENDING_LEDS: [u8; 6] = [0b0011, 0b0101, 0b1010, 0b1100, 0b1010, 0b0101];
 
 fn main() {
     let mut controllers = <Vec<JoyCon>>::with_capacity(2);
@@ -46,19 +42,12 @@ fn main() {
 
     // Show a moving LED pattern to confirm we're connected and running
     loop {
-        let led_index = (start_time.elapsed().subsec_nanos() / (1_000_000_000 / 64)) as usize;
-        log::d(&format!("LEDS: {}", led_index));
-
+        let led_index = (start_time.elapsed().subsec_nanos() / (1_000_000_000 / 6)) as usize;
         for jc in controllers.iter_mut() {
-            log::d(&jc.identify());
-            log::d("LEDs");
-
             if let Err(e) = jc.set_leds(PENDING_LEDS[led_index]) {
                 log::e(e);
             }
-
-            log::d("Input");
-            if let Err(e) = jc.handle_input() {
+            if let Err(e) = jc.flush() {
                 log::e(e);
             }
         }
