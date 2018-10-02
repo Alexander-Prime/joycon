@@ -18,7 +18,7 @@ use self::axis::{ControllerAxis as Axis, StickFrame};
 use self::button::{ButtonFrame, ControllerButton as Button};
 use self::hid::input::{InputReport, ResponseData, SpiChunk};
 use self::hid::output::{Command::*, OutputReport::*, NEUTRAL_RUMBLE};
-use self::hid::InputMode;
+use self::hid::{HciState, InputMode};
 use self::id::{ProductId, VendorId};
 use self::motion::MotionFrame;
 
@@ -242,11 +242,18 @@ impl<'a> JoyCon<'a> {
         self.leds = bitmask;
         let sub = SetLeds(bitmask);
         let cmd = DoCommand(self.rumble_counter.get(), &NEUTRAL_RUMBLE, sub);
-        self.device.write(&<Vec<u8>>::from(cmd)[..])
+        self.device.write(&<Vec<u8>>::from(cmd))
     }
 
     pub fn set_input_mode(&mut self, mode: InputMode) -> Result<usize, &str> {
         let sub = SetInputMode(mode);
+        let cmd = DoCommand(self.rumble_counter.get(), &NEUTRAL_RUMBLE, sub);
+        self.device.write(&<Vec<u8>>::from(cmd))
+    }
+
+    pub fn reset(&mut self) -> Result<usize, &str> {
+        self.set_input_mode(InputMode::Simple);
+        let sub = SetHciState(HciState::Reconnect);
         let cmd = DoCommand(self.rumble_counter.get(), &NEUTRAL_RUMBLE, sub);
         self.device.write(&<Vec<u8>>::from(cmd))
     }

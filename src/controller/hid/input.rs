@@ -79,7 +79,7 @@ pub enum SpiChunk {
 impl<'a> From<&'a [u8]> for SpiChunk {
     fn from(buf: &'a [u8]) -> SpiChunk {
         let addr = LittleEndian::read_u16(&buf[..4]);
-        let size = usize::from(buf[4]);
+        let size = buf[4] as usize;
         let buf = &buf[5..5 + size];
         match addr {
             0x6050 => SpiChunk::BodyColor(buf[0], buf[1], buf[2]),

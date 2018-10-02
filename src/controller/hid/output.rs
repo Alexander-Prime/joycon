@@ -1,6 +1,6 @@
 use byteorder::{ByteOrder, LittleEndian};
 
-use super::InputMode;
+use super::{HciState, InputMode};
 
 use self::Command::*;
 use self::OutputReport::*;
@@ -54,6 +54,7 @@ impl<'a> From<OutputReport<'a>> for Vec<u8> {
 pub enum Command {
     RequestDeviceInfo,
     SetInputMode(InputMode),
+    SetHciState(HciState),
     ReadSpi(u32, usize),
     SetLeds(u8),
     Unknown,
@@ -64,6 +65,7 @@ impl<'a> From<&'a [u8]> for Command {
         match buf[0] {
             0x02 => RequestDeviceInfo,
             0x03 => SetInputMode(InputMode::from(&buf[1])),
+            0x06 => SetHciState(HciState::from(&buf[1])),
             0x10 => ReadSpi(LittleEndian::read_u32(&buf[1..5]), buf[5] as usize),
             0x30 => SetLeds(buf[1]),
             _ => Unknown,
@@ -76,6 +78,7 @@ impl<'a> From<&'a Command> for u8 {
         match cmd {
             RequestDeviceInfo => 0x02,
             SetInputMode(_) => 0x03,
+            SetHciState(_) => 0x06,
             ReadSpi(_, _) => 0x10,
             SetLeds(_) => 0x30,
             Unknown => 0x00,

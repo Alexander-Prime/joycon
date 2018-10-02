@@ -1,8 +1,9 @@
+extern crate byteorder;
+extern crate hidapi;
 #[macro_use]
 extern crate lazy_static;
-extern crate byteorder;
-
-extern crate hidapi;
+extern crate libc;
+extern crate signal_hook;
 extern crate termion;
 
 mod controller;
@@ -15,9 +16,16 @@ use controller::hid::InputMode;
 use controller::id::ProductId;
 use controller::JoyCon;
 
+use signal_hook::{iterator::Signals, SIGINT, SIGTERM};
+
 const PENDING_LEDS: [u8; 6] = [0b0011, 0b0101, 0b1010, 0b1100, 0b1010, 0b0101];
 
 fn main() {
+    let signals = match Signals::new(&[SIGINT, SIGTERM]) {
+        Ok(signals) => signals,
+        Err(e) => panic!(e),
+    };
+
     let mut controllers = <Vec<JoyCon>>::with_capacity(2);
 
     // These can be replaced with JoyCon::from_serial() for testing
@@ -41,7 +49,7 @@ fn main() {
     let start_time = Instant::now();
 
     // Show a moving LED pattern to confirm we're connected and running
-    loop {
+    'main: loop {
         let led_index = (start_time.elapsed().subsec_nanos() / (1_000_000_000 / 6)) as usize;
         for jc in controllers.iter_mut() {
             if let Err(e) = jc.set_leds(PENDING_LEDS[led_index]) {
@@ -49,6 +57,17 @@ fn main() {
             }
             if let Err(e) = jc.flush() {
                 log::e(e);
+            }
+        }
+        for signal in signals.pending() {
+            match signal {
+                SIGINT | SIGTERM => {
+                    for jc in controllers.iter_mut() {
+                        jc.reset();
+                    }
+                    break 'main;
+                }
+                _ => unreachable!(),
             }
         }
     }
