@@ -51,10 +51,12 @@ fn main() {
     // Show a moving LED pattern to confirm we're connected and running
     'main: loop {
         let led_index = (start_time.elapsed().subsec_nanos() / (1_000_000_000 / 6)) as usize;
-        for jc in controllers.iter_mut() {
+        for jc in controllers.iter() {
             if let Err(e) = jc.set_leds(PENDING_LEDS[led_index]) {
                 log::e(e);
             }
+        }
+        for jc in controllers.iter_mut() {
             if let Err(e) = jc.flush() {
                 log::e(e);
             }
@@ -62,7 +64,7 @@ fn main() {
         for signal in signals.pending() {
             match signal {
                 SIGINT | SIGTERM => {
-                    for jc in controllers.iter_mut() {
+                    for jc in controllers.iter() {
                         jc.reset();
                     }
                     break 'main;

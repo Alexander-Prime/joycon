@@ -11,11 +11,10 @@ use termion::{
     color::*, style::{Reset as Clear, *},
 };
 
-use has::Has;
 use log;
 
-use self::axis::{ControllerAxis as Axis, StickFrame};
-use self::button::{ButtonFrame, ControllerButton as Button};
+use self::axis::StickFrame;
+use self::button::ButtonFrame;
 use self::hid::input::{InputReport, ResponseData, SpiChunk};
 use self::hid::output::{Command::*, OutputReport::*, NEUTRAL_RUMBLE};
 use self::hid::{HciState, InputMode};
@@ -38,7 +37,7 @@ pub struct JoyCon<'a> {
     button_color: (u8, u8, u8),
     serial_number: String,
     rumble_counter: Cell<u8>,
-    leds: u8,
+    leds: Cell<u8>,
 
     // Maximum Joy-Con packet size, w/ NFC/IR data
     // Most packets won't send more than ~50 bytes
@@ -89,13 +88,13 @@ impl<'a> JoyCon<'a> {
             return Err(e);
         }
 
-        let mut jc = JoyCon {
+        let jc = JoyCon {
             device: device,
             rumble_counter: Cell::new(0),
             body_color: (0x22, 0x22, 0x22),
             button_color: (0x44, 0x44, 0x44),
             serial_number: serial,
-            leds: 0x00,
+            leds: Cell::new(0x00),
 
             read_buffer: [0; 360],
 
@@ -199,30 +198,6 @@ impl<'a> JoyCon<'a> {
         ))
     }
 
-    /// Creates a string representing the current input status, formatted with
-    /// the device's physical colors
-    pub fn input_str(&self) -> String {
-        let (bdy_r, bdy_g, bdy_b) = self.body_color();
-        let (btn_r, btn_g, btn_b) = self.button_color();
-        String::from(format!(
-            "({:04x},{:04x})", // Left, down, up right (for now)
-            self.latest_frame.right_stick.x,
-            self.latest_frame.right_stick.y,
-        ))
-    }
-
-    fn button_state_color(&self, btn: Button) -> (u8, u8, u8) {
-        if self.latest_frame.buttons.has(btn) {
-            (0, 0xff, 0)
-        } else {
-            self.button_color()
-        }
-    }
-
-    fn axis_state_color(&self, axis: Axis) -> (u8, u8, u8) {
-        (0, 0, 0)
-    }
-
     pub fn body_color(&self) -> (u8, u8, u8) {
         self.body_color
     }
@@ -235,30 +210,29 @@ impl<'a> JoyCon<'a> {
         &self.serial_number
     }
 
-    pub fn set_leds(&mut self, bitmask: u8) -> Result<usize, &str> {
-        if bitmask == self.leds {
+    pub fn set_leds(&self, bitmask: u8) -> Result<usize, &'a str> {
+        if bitmask == self.leds.replace(bitmask) {
             return Ok(0);
         }
-        self.leds = bitmask;
         let sub = SetLeds(bitmask);
         let cmd = DoCommand(self.rumble_counter.get(), &NEUTRAL_RUMBLE, sub);
         self.device.write(&<Vec<u8>>::from(cmd))
     }
 
-    pub fn set_input_mode(&mut self, mode: InputMode) -> Result<usize, &str> {
+    pub fn set_input_mode(&self, mode: InputMode) -> Result<usize, &'a str> {
         let sub = SetInputMode(mode);
         let cmd = DoCommand(self.rumble_counter.get(), &NEUTRAL_RUMBLE, sub);
         self.device.write(&<Vec<u8>>::from(cmd))
     }
 
-    pub fn reset(&mut self) -> Result<usize, &str> {
+    pub fn reset(&self) -> Result<usize, &'a str> {
         self.set_input_mode(InputMode::Simple);
         let sub = SetHciState(HciState::Reconnect);
         let cmd = DoCommand(self.rumble_counter.get(), &NEUTRAL_RUMBLE, sub);
         self.device.write(&<Vec<u8>>::from(cmd))
     }
 
-    fn read_spi(&mut self, addr: u32, length: usize) -> Result<usize, &str> {
+    fn read_spi(&self, addr: u32, length: usize) -> Result<usize, &str> {
         let sub = ReadSpi(addr, length);
         let cmd = DoCommand(self.rumble_counter.get(), &NEUTRAL_RUMBLE, sub);
         let buf = &<Vec<u8>>::from(cmd);
