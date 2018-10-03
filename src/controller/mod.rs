@@ -30,7 +30,7 @@ lazy_static! {
     };
 }
 
-pub struct JoyCon<'a> {
+pub struct Controller<'a> {
     device: HidDevice<'a>,
     body_color: (u8, u8, u8),
     button_color: (u8, u8, u8),
@@ -45,11 +45,11 @@ pub struct JoyCon<'a> {
     latest_frame: InputFrame,
 }
 
-impl<'a> JoyCon<'a> {
-    /// Constructs a new JoyCon for the first device matching the given product ID
-    pub fn find(product: ProductId) -> Result<JoyCon<'a>, &'a str> {
+impl<'a> Controller<'a> {
+    /// Constructs a new Controller for the first device matching the given product ID
+    pub fn find(product: ProductId) -> Result<Controller<'a>, &'a str> {
         match API.open(VendorId::Nintendo as u16, product as u16) {
-            Ok(device) => JoyCon::from_device(device),
+            Ok(device) => Controller::from_device(device),
             Err(e) => {
                 log::e(e);
                 Err(e)
@@ -57,8 +57,8 @@ impl<'a> JoyCon<'a> {
         }
     }
 
-    /// Constructs a new JoyCon for the device matching the given serial number
-    pub fn from_serial(serial: &str) -> Result<JoyCon<'a>, &'a str> {
+    /// Constructs a new Controller for the device matching the given serial number
+    pub fn from_serial(serial: &str) -> Result<Controller<'a>, &'a str> {
         for dev in API.devices().iter() {
             match &dev.serial_number {
                 Some(s) if s.eq(serial) => {
@@ -66,7 +66,7 @@ impl<'a> JoyCon<'a> {
                         Ok(dev) => dev,
                         Err(e) => return Err(e),
                     };
-                    return JoyCon::from_device(device);
+                    return Controller::from_device(device);
                 }
                 _ => continue,
             }
@@ -77,7 +77,7 @@ impl<'a> JoyCon<'a> {
         Err("Couldn't find device")
     }
 
-    fn from_device(device: HidDevice) -> Result<JoyCon, &str> {
+    fn from_device(device: HidDevice) -> Result<Controller, &str> {
         let serial = match device.get_serial_number_string() {
             Ok(s) => s,
             Err(e) => return Err(e),
@@ -87,7 +87,7 @@ impl<'a> JoyCon<'a> {
             return Err(e);
         }
 
-        let jc = JoyCon {
+        let jc = Controller {
             device: device,
             rumble_counter: Cell::new(0),
             body_color: (0x22, 0x22, 0x22),
@@ -223,7 +223,7 @@ impl<'a> JoyCon<'a> {
     }
 }
 
-impl<'a> fmt::Display for JoyCon<'a> {
+impl<'a> fmt::Display for Controller<'a> {
     /// Creates a string identifying this device, including its name and serial
     /// number, formatted with the device's physical colors
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {

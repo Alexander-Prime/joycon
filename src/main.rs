@@ -14,7 +14,7 @@ use std::time::Instant;
 
 use controller::hid::InputMode;
 use controller::id::ProductId;
-use controller::JoyCon;
+use controller::Controller;
 
 use signal_hook::{iterator::Signals, SIGINT, SIGTERM};
 
@@ -26,14 +26,13 @@ fn main() {
         Err(e) => panic!(e),
     };
 
-    let mut controllers = <Vec<JoyCon>>::with_capacity(2);
+    let mut controllers = <Vec<Controller>>::with_capacity(2);
 
-    // These can be replaced with JoyCon::from_serial() for testing
-    match JoyCon::find(ProductId::JoyConL) {
+    match Controller::find(ProductId::JoyConL) {
         Ok(jc) => controllers.push(jc),
         Err(e) => log::e(e),
     }
-    match JoyCon::find(ProductId::JoyConR) {
+    match Controller::find(ProductId::JoyConR) {
         Ok(jc) => controllers.push(jc),
         Err(e) => log::e(e),
     }
