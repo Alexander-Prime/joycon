@@ -5,11 +5,10 @@ pub mod id;
 pub mod motion;
 
 use std::cell::Cell;
+use std::fmt;
 
 use hidapi::{HidApi, HidDevice};
-use termion::{
-    color::*, style::{Reset as Clear, *},
-};
+use termion::{color, style};
 
 use log;
 
@@ -182,22 +181,6 @@ impl<'a> JoyCon<'a> {
         }
     }
 
-    /// Creates a string identifying this device, including its name and serial
-    /// number, formatted with the device's physical colors
-    pub fn identify(&self) -> String {
-        let (bdy_r, bdy_g, bdy_b) = self.body_color();
-        let (btn_r, btn_g, btn_b) = self.button_color();
-        String::from(format!(
-            "{}{}{} {} [{}] {}",
-            Fg(Rgb(btn_r, btn_g, btn_b)),
-            Bg(Rgb(bdy_r, bdy_g, bdy_b)),
-            Bold,
-            self.device.get_product_string().unwrap(),
-            self.serial_number(),
-            Clear
-        ))
-    }
-
     pub fn body_color(&self) -> (u8, u8, u8) {
         self.body_color
     }
@@ -237,6 +220,29 @@ impl<'a> JoyCon<'a> {
         let cmd = DoCommand(self.rumble_counter.get(), &NEUTRAL_RUMBLE, sub);
         let buf = &<Vec<u8>>::from(cmd);
         self.device.write(buf)
+    }
+}
+
+impl<'a> fmt::Display for JoyCon<'a> {
+    /// Creates a string identifying this device, including its name and serial
+    /// number, formatted with the device's physical colors
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        let (bdy_r, bdy_g, bdy_b) = self.body_color();
+        let (btn_r, btn_g, btn_b) = self.button_color();
+        let prod_str = match self.device.get_product_string() {
+            Ok(s) => s,
+            Err(_) => String::new(),
+        };
+        write!(
+            f,
+            "{}{}{} {} [{}] {}",
+            color::Fg(color::Rgb(btn_r, btn_g, btn_b)),
+            color::Bg(color::Rgb(bdy_r, bdy_g, bdy_b)),
+            style::Bold,
+            prod_str,
+            self.serial_number(),
+            style::Reset
+        )
     }
 }
 

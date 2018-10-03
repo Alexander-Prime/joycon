@@ -40,7 +40,7 @@ fn main() {
 
     // Print some basic device identity info
     for jc in controllers.iter_mut() {
-        println!("Connected to {}", jc.identify());
+        println!("Connected to {}", jc);
         if let Err(e) = jc.set_input_mode(InputMode::Full) {
             log::e(e);
         }
