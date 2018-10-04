@@ -64,7 +64,9 @@ fn main() {
             match signal {
                 SIGINT | SIGTERM => {
                     for jc in controllers.iter() {
-                        jc.reset();
+                        if let Err(e) = jc.reset() {
+                            println!("{}", e);
+                        }
                     }
                     break 'main;
                 }
