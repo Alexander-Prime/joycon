@@ -1,12 +1,2 @@
-[package]
-name = "joycon"
-version = "0.1.0"
-authors = ["Alexander Peters <rainesabaal@gmail.com>"]
-
-[dependencies]
-byteorder = "1"
-hidapi = { git = "https://github.com/drola/hidapi-rs.git", branch = "linux-native-driver", features = ["linux-hidraw"]}
-lazy_static = "1.0.1"
-libc = "*"
-signal-hook = "0.1.5"
-termion = "*"
+[workspace]
+members=["joycon-driver", "joycon-proxy", "joycond"]
