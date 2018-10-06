@@ -1,4 +1,4 @@
-use has::Has;
+use common::has::Has;
 
 use self::ControllerButton::*;
 

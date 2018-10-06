@@ -5,6 +5,7 @@ authors = ["Alexander Peters <alexander.n.peters@gmail.com>"]
 
 [dependencies]
 byteorder = "1.2.6"
+common = { path = "../common" }
 hidapi = { git = "https://github.com/drola/hidapi-rs.git", branch = "linux-native-driver", features = ["linux-hidraw"]}
 lazy_static = "1.0.1"
 signal-hook = "0.1.5"

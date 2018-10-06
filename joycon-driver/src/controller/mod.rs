@@ -10,7 +10,7 @@ use std::fmt;
 use hidapi::{HidApi, HidDevice};
 use termion::{color, style};
 
-use log;
+use common::log;
 
 use self::axis::StickFrame;
 use self::button::ButtonFrame;

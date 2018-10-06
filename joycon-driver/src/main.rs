@@ -2,13 +2,13 @@ extern crate byteorder;
 extern crate hidapi;
 #[macro_use]
 extern crate lazy_static;
+extern crate common;
 extern crate signal_hook;
 extern crate termion;
 
 mod controller;
-mod has;
-mod log;
 
+use common::log;
 use std::time::Instant;
 
 use controller::hid::InputMode;

@@ -28,6 +28,13 @@ version = "0.1.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 
 [[package]]
+name = "common"
+version = "0.1.0"
+dependencies = [
+ "termion 1.5.1 (registry+https://github.com/rust-lang/crates.io-index)",
+]
+
+[[package]]
 name = "custom_derive"
 version = "0.1.7"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -71,6 +78,7 @@ name = "joycon-driver"
 version = "0.1.0"
 dependencies = [
  "byteorder 1.2.6 (registry+https://github.com/rust-lang/crates.io-index)",
+ "common 0.1.0",
  "hidapi 0.4.1 (git+https://github.com/drola/hidapi-rs.git?branch=linux-native-driver)",
  "lazy_static 1.1.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "signal-hook 0.1.5 (registry+https://github.com/rust-lang/crates.io-index)",
