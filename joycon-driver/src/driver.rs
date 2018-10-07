@@ -1,9 +1,3 @@
-pub mod axis;
-pub mod button;
-pub mod hid;
-pub mod id;
-pub mod motion;
-
 use std::cell::Cell;
 use std::fmt;
 
@@ -12,13 +6,11 @@ use termion::{color, style};
 
 use common::log;
 
-use self::axis::StickFrame;
-use self::button::ButtonFrame;
-use self::hid::input::{InputReport, ResponseData, SpiChunk};
-use self::hid::output::{Command::*, OutputReport::*, NEUTRAL_RUMBLE};
-use self::hid::{HciState, InputMode};
-use self::id::{ProductId, VendorId};
-use self::motion::MotionFrame;
+use super::device::{HciState, InputMode};
+use super::frame::{AxisFrame, ButtonFrame, InputFrame, MotionFrame};
+use super::id::{Product, Vendor};
+use super::input::{InputReport, ResponseData, SpiChunk};
+use super::output::{Command::*, OutputReport::*, NEUTRAL_RUMBLE};
 
 lazy_static! {
     static ref API: HidApi = match HidApi::new() {
@@ -30,7 +22,7 @@ lazy_static! {
     };
 }
 
-pub struct Controller<'a> {
+pub struct Driver<'a> {
     device: HidDevice<'a>,
     body_color: (u8, u8, u8),
     button_color: (u8, u8, u8),
@@ -45,11 +37,11 @@ pub struct Controller<'a> {
     latest_frame: InputFrame,
 }
 
-impl<'a> Controller<'a> {
-    /// Constructs a new Controller for the first device matching the given product ID
-    pub fn find(product: ProductId) -> Result<Controller<'a>, &'a str> {
-        match API.open(VendorId::Nintendo as u16, product as u16) {
-            Ok(device) => Controller::from_device(device),
+impl<'a> Driver<'a> {
+    /// Constructs a new Driver for the first device matching the given product ID
+    pub fn find(product: Product) -> Result<Driver<'a>, &'a str> {
+        match API.open(Vendor::Nintendo as u16, product as u16) {
+            Ok(device) => Driver::for_device(device),
             Err(e) => {
                 log::e(e);
                 Err(e)
@@ -58,7 +50,7 @@ impl<'a> Controller<'a> {
     }
 
     /// Constructs a new Controller for the device matching the given serial number
-    pub fn from_serial(serial: &str) -> Result<Controller<'a>, &'a str> {
+    pub fn for_serial(serial: &str) -> Result<Driver<'a>, &'a str> {
         for dev in API.devices().iter() {
             match &dev.serial_number {
                 Some(s) if s.eq(serial) => {
@@ -66,7 +58,7 @@ impl<'a> Controller<'a> {
                         Ok(dev) => dev,
                         Err(e) => return Err(e),
                     };
-                    return Controller::from_device(device);
+                    return Driver::for_device(device);
                 }
                 _ => continue,
             }
@@ -77,7 +69,7 @@ impl<'a> Controller<'a> {
         Err("Couldn't find device")
     }
 
-    fn from_device(device: HidDevice) -> Result<Controller, &str> {
+    fn for_device(device: HidDevice) -> Result<Driver, &str> {
         let serial = match device.get_serial_number_string() {
             Ok(s) => s,
             Err(e) => return Err(e),
@@ -87,7 +79,7 @@ impl<'a> Controller<'a> {
             return Err(e);
         }
 
-        let jc = Controller {
+        let jc = Driver {
             device: device,
             rumble_counter: Cell::new(0),
             body_color: (0x22, 0x22, 0x22),
@@ -137,14 +129,14 @@ impl<'a> Controller<'a> {
         match report {
             InputReport::CommandResponse {
                 battery: _,
-                buttons,
-                left_stick,
-                right_stick,
+                buttons: _,
+                axes: _,
                 data,
             } => {
-                self.latest_frame.buttons = buttons;
-                self.latest_frame.left_stick = left_stick;
-                self.latest_frame.right_stick = right_stick;
+                // FIXME: add mutable method to modify Frame structs
+                // self.latest_frame.buttons = buttons;
+                // self.latest_frame.axes = axes;
+                // self.latest_frame.motion = motion;
                 self.handle_response(data);
             }
             _ => (),
@@ -223,7 +215,7 @@ impl<'a> Controller<'a> {
     }
 }
 
-impl<'a> fmt::Display for Controller<'a> {
+impl<'a> fmt::Display for Driver<'a> {
     /// Creates a string identifying this device, including its name and serial
     /// number, formatted with the device's physical colors
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
@@ -243,23 +235,5 @@ impl<'a> fmt::Display for Controller<'a> {
             self.serial_number(),
             style::Reset
         )
-    }
-}
-
-pub struct InputFrame {
-    buttons: ButtonFrame,
-    left_stick: StickFrame,
-    right_stick: StickFrame,
-    motion: MotionFrame,
-}
-
-impl InputFrame {
-    fn new() -> InputFrame {
-        InputFrame {
-            buttons: ButtonFrame::new(),
-            left_stick: StickFrame::new(),
-            right_stick: StickFrame::new(),
-            motion: MotionFrame::new(),
-        }
     }
 }

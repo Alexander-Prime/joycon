@@ -1,6 +1,3 @@
-pub mod input;
-pub mod output;
-
 pub enum InputMode {
     Full,
     NfcIr,

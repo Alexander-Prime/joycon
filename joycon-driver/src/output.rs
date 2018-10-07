@@ -1,19 +1,14 @@
 use byteorder::{ByteOrder, LittleEndian};
 
-use super::{HciState, InputMode};
+use super::device::{HciState, InputMode};
 
 use self::Command::*;
 use self::OutputReport::*;
 
 pub const NEUTRAL_RUMBLE: [u8; 8] = [
     0x00, // Neutral L rumble
-    0x01,
-    0x40,
-    0x40,
-    0x00, // Neutral R rumble
-    0x01,
-    0x40,
-    0x40,
+    0x01, 0x40, 0x40, 0x00, // Neutral R rumble
+    0x01, 0x40, 0x40,
 ];
 
 pub enum OutputReport<'a> {

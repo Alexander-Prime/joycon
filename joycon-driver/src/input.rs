@@ -1,8 +1,6 @@
 use byteorder::{ByteOrder, LittleEndian};
 
-use controller::axis::StickFrame;
-use controller::button::ButtonFrame;
-use controller::motion::MotionFrame;
+use super::frame::{AxisFrame, ButtonFrame, MotionFrame};
 
 use self::InputReport::*;
 
@@ -12,15 +10,13 @@ pub enum InputReport<'a> {
     CommandResponse {
         battery: BatteryState,
         buttons: ButtonFrame,
-        left_stick: StickFrame,
-        right_stick: StickFrame,
+        axes: AxisFrame,
         data: ResponseData<'a>,
     },
     ExtendedInput {
         battery: BatteryState,
         buttons: ButtonFrame,
-        left_stick: StickFrame,
-        right_stick: StickFrame,
+        axes: AxisFrame,
         motion: MotionFrame,
     },
     SimpleInput(u16, u8),
@@ -34,15 +30,13 @@ impl<'a> From<&'a [u8]> for InputReport<'a> {
                 // Timer byte at buf[1]
                 battery: buf[2] >> 1,
                 buttons: ButtonFrame::from(&buf[3..6]),
-                left_stick: StickFrame::from(&buf[6..9]),
-                right_stick: StickFrame::from(&buf[9..12]),
+                axes: AxisFrame::from(&buf[6..12]),
                 data: ResponseData::from(&buf[13..49]),
             },
             0x30 | 0x31 | 0x32 | 0x33 => ExtendedInput {
                 battery: buf[1] >> 1,
                 buttons: ButtonFrame::from(&buf[2..5]),
-                left_stick: StickFrame::from(&buf[5..8]),
-                right_stick: StickFrame::from(&buf[8..11]),
+                axes: AxisFrame::from(&buf[5..11]),
                 // TODO We actually get 3 motion frames here, should probably average them
                 motion: MotionFrame::from(&buf[11..23]),
             },
