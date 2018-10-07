@@ -4,9 +4,10 @@ version = "0.1.0"
 authors = ["Alexander Peters <alexander.n.peters@gmail.com>"]
 
 [dependencies]
-byteorder = "1.2.6"
+byteorder = "1.2"
 common = { path = "../common" }
+getopts = "0.2"
 hidapi = { git = "https://github.com/drola/hidapi-rs.git", branch = "linux-native-driver", features = ["linux-hidraw"]}
-lazy_static = "1.0.1"
-signal-hook = "0.1.5"
-termion = "1.5.1"
+lazy_static = "1.0"
+signal-hook = "0.1"
+termion = "1.5"
