@@ -1,10 +1,12 @@
 extern crate byteorder;
+extern crate getopts;
 extern crate hidapi;
 #[macro_use]
 extern crate lazy_static;
-extern crate common;
 extern crate signal_hook;
 extern crate termion;
+
+extern crate common;
 
 mod axis;
 mod button;
@@ -17,12 +19,13 @@ mod output;
 
 use std::time::Instant;
 
-use common::log;
+use getopts::Options;
 use signal_hook::{iterator::Signals, SIGINT, SIGTERM};
+
+use common::log;
 
 use device::InputMode;
 use driver::Driver;
-use id::Product;
 
 const PENDING_LEDS: [u8; 6] = [0b0011, 0b0101, 0b1010, 0b1100, 0b1010, 0b0101];
 
@@ -32,47 +35,43 @@ fn main() {
         Err(e) => panic!(e),
     };
 
-    let mut drivers = <Vec<Driver>>::with_capacity(2);
+    let opts = Options::new();
 
-    match Driver::find(Product::JoyConL) {
-        Ok(jc) => drivers.push(jc),
-        Err(e) => log::e(e),
-    }
-    match Driver::find(Product::JoyConR) {
-        Ok(jc) => drivers.push(jc),
-        Err(e) => log::e(e),
-    }
+    let args: Vec<String> = std::env::args().collect();
+    let serial = match opts.parse(&args[1..]) {
+        Ok(ref m) if m.free.is_empty() => panic!("Please supply a device serial ID"),
+        Err(e) => panic!(e),
+        Ok(m) => m.free[0].clone(),
+    };
 
-    // Print some basic device identity info
-    for jc in drivers.iter_mut() {
-        println!("Connected to {}", jc);
-        if let Err(e) = jc.set_input_mode(InputMode::Full) {
-            log::e(e);
-        }
-    }
+    let mut driver = match Driver::for_serial(&serial) {
+        Ok(driver) => driver,
+        Err(e) => panic!("{}", e),
+    };
+
+    println!("Connected to {}", driver);
+    if let Err(e) = driver.set_input_mode(InputMode::Full) {
+        log::e(&format!("{:?}", e))
+    };
 
     let start_time = Instant::now();
 
     // Show a moving LED pattern to confirm we're connected and running
     'main: loop {
         let led_index = (start_time.elapsed().subsec_nanos() / (1_000_000_000 / 6)) as usize;
-        for jc in drivers.iter() {
-            if let Err(e) = jc.set_leds(PENDING_LEDS[led_index]) {
-                log::e(e);
-            }
+        if let Err(e) = driver.set_leds(PENDING_LEDS[led_index]) {
+            log::e(&format!("{:?}", e));
         }
-        for jc in drivers.iter_mut() {
-            if let Err(e) = jc.flush() {
-                log::e(e);
-            }
+
+        if let Err(e) = driver.flush() {
+            log::e(&format!("{:?}", e));
         }
+
         for signal in signals.pending() {
             match signal {
                 SIGINT | SIGTERM => {
-                    for jc in drivers.iter() {
-                        if let Err(e) = jc.reset() {
-                            println!("{}", e);
-                        }
+                    if let Err(e) = driver.reset() {
+                        println!("{}", e);
                     }
                     break 'main;
                 }
