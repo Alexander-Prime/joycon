@@ -1,8 +1,6 @@
 extern crate byteorder;
 extern crate getopts;
 extern crate hidapi;
-#[macro_use]
-extern crate lazy_static;
 extern crate signal_hook;
 extern crate termion;
 
