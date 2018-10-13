@@ -2,3 +2,6 @@
 name = "joycond"
 version = "0.1.0"
 authors = ["Alexander Peters <alexander.n.peters@gmail.com>"]
+
+[dependencies]
+common = { path = "../common" }
