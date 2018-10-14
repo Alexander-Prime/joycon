@@ -1,4 +1,4 @@
-use std::io::Error;
+use std::io::{Error, Write};
 use std::os::unix::net::{UnixListener, UnixStream};
 use std::thread;
 
@@ -31,6 +31,6 @@ pub fn listen() -> Result<Never, Error> {
     Err(Error::last_os_error())
 }
 
-fn handle_connection(stream: UnixStream) {
-    // Do things here
+fn handle_connection(mut stream: UnixStream) {
+    stream.write(String::from("bytes").as_bytes());
 }
