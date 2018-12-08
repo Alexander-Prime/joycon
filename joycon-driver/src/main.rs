@@ -17,13 +17,14 @@ mod output;
 
 use std::time::Instant;
 
-use getopts::Options;
+// use getopts::Options;
 use signal_hook::{iterator::Signals, SIGINT, SIGTERM};
 
 use common::log;
 
 use device::InputMode;
 use driver::Driver;
+use id::Product;
 
 const PENDING_LEDS: [u8; 6] = [0b0011, 0b0101, 0b1010, 0b1100, 0b1010, 0b0101];
 
@@ -33,19 +34,26 @@ fn main() {
         Err(e) => panic!(e),
     };
 
-    let opts = Options::new();
-
-    let args: Vec<String> = std::env::args().collect();
-    let serial = match opts.parse(&args[1..]) {
-        Ok(ref m) if m.free.is_empty() => panic!("Please supply a device serial ID"),
-        Err(e) => panic!(e),
-        Ok(m) => m.free[0].clone(),
-    };
-
-    let mut driver = match Driver::for_serial(&serial) {
+    let mut driver = match Driver::find(Product::JoyConR) {
         Ok(driver) => driver,
         Err(e) => panic!("{}", e),
     };
+
+    // return;
+
+    // let opts = Options::new();
+
+    // let args: Vec<String> = std::env::args().collect();
+    // let serial = match opts.parse(&args[1..]) {
+    //     Ok(ref m) if m.free.is_empty() => panic!("Please supply a device serial ID"),
+    //     Err(e) => panic!(e),
+    //     Ok(m) => m.free[0].clone(),
+    // };
+
+    // let mut driver = match Driver::for_serial(&serial) {
+    //     Ok(driver) => driver,
+    //     Err(e) => panic!("{}", e),
+    // };
 
     println!("Connected to {}", driver);
     if let Err(e) = driver.set_input_mode(InputMode::Full) {
@@ -56,7 +64,7 @@ fn main() {
 
     // Show a moving LED pattern to confirm we're connected and running
     'main: loop {
-        let led_index = (start_time.elapsed().subsec_nanos() / (1_000_000_000 / 6)) as usize;
+        let led_index = ((start_time.elapsed().subsec_nanos() / (1_000_000_000 / 6)) % 6) as usize;
         if let Err(e) = driver.set_leds(PENDING_LEDS[led_index]) {
             log::e(&format!("{:?}", e));
         }
