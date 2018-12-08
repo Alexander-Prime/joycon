@@ -1,3 +1,4 @@
+#[derive(Copy, Clone, Debug)]
 pub enum Product {
     JoyConL = 0x2006,
     JoyConR = 0x2007,
