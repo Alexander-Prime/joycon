@@ -1,3 +1,4 @@
+extern crate arraydeque;
 extern crate byteorder;
 extern crate getopts;
 extern crate hidapi;

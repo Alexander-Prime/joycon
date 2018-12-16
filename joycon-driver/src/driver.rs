@@ -1,6 +1,7 @@
 use std::cell::Cell;
 use std::fmt;
 
+use arraydeque::{ArrayDeque, Wrapping};
 use hidapi::{HidApi, HidDevice, HidError};
 use termion::{color, style};
 
@@ -22,6 +23,9 @@ fn init_api() -> HidApi {
     }
 }
 
+// Offset in SPI memory that `spi_mirror` begins at
+const SPI_ORIGIN: u16 = 0x6000;
+
 pub struct Driver {
     device: HidDevice,
     body_color: (u8, u8, u8),
@@ -34,7 +38,10 @@ pub struct Driver {
     // Most packets won't send more than ~50 bytes
     read_buffer: [u8; 360],
 
-    latest_frame: InputFrame,
+    // Mirror of a subset of the Joy-Con's internal flash memory
+    spi_mirror: [u8; 0xA000],
+
+    frames: ArrayDeque<[InputFrame; 32], Wrapping>,
 }
 
 impl Driver {
@@ -47,7 +54,7 @@ impl Driver {
         }
     }
 
-    /// Constructs a new Controller for the device matching the given serial number
+    /// Constructs a new Driver for the device matching the given serial number
     pub fn for_serial(serial: &str) -> Result<Driver, HidError> {
         let api = init_api();
         let device_info = api.devices().iter().find(|dev| match &dev.serial_number {
@@ -89,9 +96,11 @@ impl Driver {
             serial_number: serial,
             leds: Cell::new(0x00),
 
+            spi_mirror: [0; 0xA000],
+
             read_buffer: [0; 360],
 
-            latest_frame: InputFrame::new(),
+            frames: ArrayDeque::new(),
         };
 
         jc.set_input_mode(InputMode::Simple);
