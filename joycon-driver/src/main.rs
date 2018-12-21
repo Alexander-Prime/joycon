@@ -40,26 +40,10 @@ fn main() {
         Err(e) => panic!("{}", e),
     };
 
-    // return;
-
-    // let opts = Options::new();
-
-    // let args: Vec<String> = std::env::args().collect();
-    // let serial = match opts.parse(&args[1..]) {
-    //     Ok(ref m) if m.free.is_empty() => panic!("Please supply a device serial ID"),
-    //     Err(e) => panic!(e),
-    //     Ok(m) => m.free[0].clone(),
-    // };
-
-    // let mut driver = match Driver::for_serial(&serial) {
-    //     Ok(driver) => driver,
-    //     Err(e) => panic!("{}", e),
-    // };
-
-    println!("Connected to {}", driver);
     if let Err(e) = driver.set_input_mode(InputMode::Full) {
         log::e(&format!("{:?}", e))
-    };
+    }
+    println!("Connected to {}", driver);
 
     let start_time = Instant::now();
 

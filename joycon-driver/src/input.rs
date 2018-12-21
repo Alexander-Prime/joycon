@@ -48,8 +48,9 @@ impl<'a> From<&'a [u8]> for InputReport<'a> {
 
 pub enum ResponseData<'a> {
     SetInputMode,
-    ReadSpi(SpiChunk),
+    ReadSpi(SpiChunk<'a>),
     SetLeds,
+    GetLeds,
     Unknown(&'a [u8]),
 }
 
@@ -59,26 +60,19 @@ impl<'a> From<&'a [u8]> for ResponseData<'a> {
             0x03 => ResponseData::SetInputMode,
             0x10 => ResponseData::ReadSpi(SpiChunk::from(&buf[2..])),
             0x30 => ResponseData::SetLeds,
+            0x31 => ResponseData::GetLeds,
             _ => ResponseData::Unknown(&buf[..]),
         }
     }
 }
 
-pub enum SpiChunk {
-    BodyColor(u8, u8, u8),
-    ButtonColor(u8, u8, u8),
-    Unknown(u16, usize),
-}
+pub struct SpiChunk<'a>(pub u16, pub &'a [u8]);
 
-impl<'a> From<&'a [u8]> for SpiChunk {
+impl<'a> From<&'a [u8]> for SpiChunk<'a> {
     fn from(buf: &'a [u8]) -> SpiChunk {
         let addr = LittleEndian::read_u16(&buf[..4]);
         let size = buf[4] as usize;
         let buf = &buf[5..5 + size];
-        match addr {
-            0x6050 => SpiChunk::BodyColor(buf[0], buf[1], buf[2]),
-            0x6053 => SpiChunk::ButtonColor(buf[0], buf[1], buf[2]),
-            _ => SpiChunk::Unknown(addr, size),
-        }
+        SpiChunk(addr, buf)
     }
 }
