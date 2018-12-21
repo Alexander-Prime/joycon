@@ -224,17 +224,30 @@ impl Driver {
         let buf = &<Vec<u8>>::from(cmd);
         self.device.write(buf)
     }
+
+    pub fn body_color(&self) -> (u8, u8, u8) {
+        (
+            self.spi_mirror[0x50],
+            self.spi_mirror[0x51],
+            self.spi_mirror[0x52],
+        )
+    }
+
+    pub fn button_color(&self) -> (u8, u8, u8) {
+        (
+            self.spi_mirror[0x53],
+            self.spi_mirror[0x54],
+            self.spi_mirror[0x55],
+        )
+    }
 }
 
 impl fmt::Display for Driver {
     /// Creates a string identifying this device, including its name and serial
     /// number, formatted with the device's physical colors
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        let colors = &self.spi_mirror[0x50..0x56];
-        let ((bdy_r, bdy_g, bdy_b), (btn_r, btn_g, btn_b)) = match *colors {
-            [a, b, c, d, e, f] => ((a, b, c), (d, e, f)),
-            _ => (DEFAULT_BODY_COLOR, DEFAULT_BUTTON_COLOR),
-        };
+        let ((bdy_r, bdy_g, bdy_b), (btn_r, btn_g, btn_b)) =
+            (self.body_color(), self.button_color());
         let prod_str = match self.device.get_product_string() {
             Ok(Some(s)) => s,
             Ok(None) | Err(_) => String::new(),
