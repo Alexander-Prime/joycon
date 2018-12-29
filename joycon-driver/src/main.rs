@@ -35,9 +35,12 @@ fn main() {
         Err(e) => panic!(e),
     };
 
-    let mut driver = match Driver::find(Product::JoyConR) {
+    let mut driver = match Driver::find(Product::JoyConL)
+        .or_else(|_| Driver::find(Product::JoyConR))
+        .or_else(|_| Driver::find(Product::ProController))
+    {
         Ok(driver) => driver,
-        Err(e) => panic!("{}", e),
+        Err(e) => panic!("No Joy-Con or Switch Pro Controller devices found"),
     };
 
     if let Err(e) = driver.set_input_mode(InputMode::Full) {
