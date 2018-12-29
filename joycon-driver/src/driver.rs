@@ -164,9 +164,21 @@ impl Driver {
             } => {
                 self.handle_response(data);
             }
+            InputReport::ExtendedInput {
+                battery: _,
+                buttons,
+                axes: _,
+                motion: _,
+            } => self.handle_buttons(buttons),
             _ => (),
         }
         Ok(Some(len))
+    }
+
+    fn handle_buttons(&mut self, buttons: ButtonFrame) {
+        let ButtonFrame(buf) = buttons;
+        let buf = &buf[..];
+        log::d(&format!("{}", log::buf(buf)));
     }
 
     fn handle_response(&mut self, data: ResponseData) {

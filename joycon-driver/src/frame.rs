@@ -22,7 +22,7 @@ impl InputFrame {
 }
 
 #[derive(Default)]
-pub struct ButtonFrame([u8; 3]);
+pub struct ButtonFrame(pub [u8; 3]);
 
 impl<'a> From<&'a [u8]> for ButtonFrame {
     fn from(buf: &[u8]) -> ButtonFrame {
