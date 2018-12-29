@@ -26,7 +26,7 @@ use device::InputMode;
 use driver::Driver;
 use id::Product;
 
-const PENDING_LEDS: [u8; 6] = [0b0011, 0b0101, 0b1010, 0b1100, 0b1010, 0b0101];
+const PENDING_LEDS: u8 = 0b1111_0000;
 
 fn main() {
     let signals = match Signals::new(&[SIGINT, SIGTERM]) {
@@ -45,20 +45,19 @@ fn main() {
     if let Err(e) = driver.set_input_mode(InputMode::Full) {
         log::e(&format!("{:?}", e))
     }
-    println!("Connected to {}", driver);
+    if let Err(e) = driver.set_leds(PENDING_LEDS) {
+        log::e(&format!("{:?}", e));
+    }
 
-    let start_time = Instant::now();
+    println!("Connected to {}", driver);
 
     // Show a moving LED pattern to confirm we're connected and running
     'main: loop {
-        let led_index = ((start_time.elapsed().subsec_nanos() / (1_000_000_000 / 6)) % 6) as usize;
-        if let Err(e) = driver.set_leds(PENDING_LEDS[led_index]) {
-            log::e(&format!("{:?}", e));
-        }
-
         if let Err(e) = driver.flush() {
             log::e(&format!("{:?}", e));
         }
+
+        println!("{}", driver);
 
         for signal in signals.pending() {
             match signal {
