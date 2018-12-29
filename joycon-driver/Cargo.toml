@@ -4,6 +4,7 @@ version = "0.1.0"
 authors = ["Alexander Peters <alexander.n.peters@gmail.com>"]
 
 [dependencies]
+arraydeque = "0.4"
 byteorder = "1.2"
 common = { path = "../common" }
 getopts = "0.2"

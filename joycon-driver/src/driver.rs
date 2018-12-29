@@ -1,6 +1,7 @@
 use std::cell::Cell;
 use std::fmt;
 
+use arraydeque::{ArrayDeque, Wrapping};
 use hidapi::{HidApi, HidDevice, HidError};
 use termion::{color, style};
 
@@ -22,10 +23,14 @@ fn init_api() -> HidApi {
     }
 }
 
+// Offset in SPI memory that `spi_mirror` begins at
+const SPI_ORIGIN: u16 = 0x6000;
+
+const DEFAULT_BODY_COLOR: (u8, u8, u8) = (0x40, 0x40, 0x40);
+const DEFAULT_BUTTON_COLOR: (u8, u8, u8) = (0x1c, 0x1c, 0x1c);
+
 pub struct Driver {
     device: HidDevice,
-    body_color: (u8, u8, u8),
-    button_color: (u8, u8, u8),
     serial_number: String,
     rumble_counter: Cell<u8>,
     leds: Cell<u8>,
@@ -34,7 +39,10 @@ pub struct Driver {
     // Most packets won't send more than ~50 bytes
     read_buffer: [u8; 360],
 
-    latest_frame: InputFrame,
+    // Mirror of a subset of the Joy-Con's internal flash memory
+    spi_mirror: [u8; 0xA000],
+
+    frames: ArrayDeque<[InputFrame; 32], Wrapping>,
 }
 
 impl Driver {
@@ -47,7 +55,7 @@ impl Driver {
         }
     }
 
-    /// Constructs a new Controller for the device matching the given serial number
+    /// Constructs a new Driver for the device matching the given serial number
     pub fn for_serial(serial: &str) -> Result<Driver, HidError> {
         let api = init_api();
         let device_info = api.devices().iter().find(|dev| match &dev.serial_number {
@@ -81,24 +89,26 @@ impl Driver {
             return Err(e);
         }
 
-        let jc = Driver {
+        let mut jc = Driver {
             device,
             rumble_counter: Cell::new(0),
-            body_color: (0x22, 0x22, 0x22),
-            button_color: (0x44, 0x44, 0x44),
             serial_number: serial,
             leds: Cell::new(0x00),
 
+            spi_mirror: [0; 0xA000],
+
             read_buffer: [0; 360],
 
-            latest_frame: InputFrame::new(),
+            frames: ArrayDeque::new(),
         };
 
-        jc.set_input_mode(InputMode::Simple);
-        jc.read_spi(0x6050, 3);
-        jc.read_spi(0x6053, 3);
-
-        Ok(jc)
+        // TODO Find a way to guarantee this isn't racing other input packets
+        jc.flush()
+            .and_then(|_| jc.set_input_mode(InputMode::Simple))
+            .and_then(|_| jc.await_input())
+            .and_then(|_| jc.read_spi(0x6050, 6))
+            .and_then(|_| jc.await_input())
+            .and_then(|_| Ok(jc))
     }
 
     /// Read and handle all buffered inputs. Blocks until the queue is emptied.
@@ -112,6 +122,23 @@ impl Driver {
                 _ => count += 1,
             }
         }
+    }
+
+    /// Block until the next input packet and handle it with `handle_input()`
+    fn await_input(&mut self) -> Result<usize, HidError> {
+        // TODO Investigate whether `set_blocking_mode()` introduces any overhead
+        if let Err(e) = self.device.set_blocking_mode(true) {
+            return Err(e);
+        };
+        let result = match self.handle_input() {
+            Ok(Some(value)) => Ok(value),
+            Ok(None) => Ok(0),
+            Err(e) => Err(e),
+        };
+        if let Err(e) = self.device.set_blocking_mode(false) {
+            return Err(e);
+        };
+        result
     }
 
     /// Receive an input packet, read its input report code, and handle the rest
@@ -135,10 +162,6 @@ impl Driver {
                 axes: _,
                 data,
             } => {
-                // FIXME: add mutable method to modify Frame structs
-                // self.latest_frame.buttons = buttons;
-                // self.latest_frame.axes = axes;
-                // self.latest_frame.motion = motion;
                 self.handle_response(data);
             }
             _ => (),
@@ -161,26 +184,10 @@ impl Driver {
     }
 
     fn save_spi_chunk(&mut self, chunk: SpiChunk) {
-        match chunk {
-            SpiChunk::BodyColor(r, g, b) => {
-                self.body_color = (r, g, b);
-            }
-            SpiChunk::ButtonColor(r, g, b) => {
-                self.button_color = (r, g, b);
-            }
-            SpiChunk::Unknown(addr, len) => log::e(&format!(
-                "Read unknown SPI data, {} bytes at 0x{:04x}",
-                len, addr
-            )),
-        }
-    }
-
-    pub fn body_color(&self) -> (u8, u8, u8) {
-        self.body_color
-    }
-
-    pub fn button_color(&self) -> (u8, u8, u8) {
-        self.button_color
+        let SpiChunk(addr, buf) = chunk;
+        let start = (addr - SPI_ORIGIN) as usize;
+        let end = start + buf.len();
+        self.spi_mirror[start..end].copy_from_slice(buf);
     }
 
     pub fn serial_number(&self) -> &str {
@@ -217,14 +224,30 @@ impl Driver {
         let buf = &<Vec<u8>>::from(cmd);
         self.device.write(buf)
     }
+
+    pub fn body_color(&self) -> (u8, u8, u8) {
+        (
+            self.spi_mirror[0x50],
+            self.spi_mirror[0x51],
+            self.spi_mirror[0x52],
+        )
+    }
+
+    pub fn button_color(&self) -> (u8, u8, u8) {
+        (
+            self.spi_mirror[0x53],
+            self.spi_mirror[0x54],
+            self.spi_mirror[0x55],
+        )
+    }
 }
 
 impl fmt::Display for Driver {
     /// Creates a string identifying this device, including its name and serial
     /// number, formatted with the device's physical colors
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        let (bdy_r, bdy_g, bdy_b) = self.body_color();
-        let (btn_r, btn_g, btn_b) = self.button_color();
+        let ((bdy_r, bdy_g, bdy_b), (btn_r, btn_g, btn_b)) =
+            (self.body_color(), self.button_color());
         let prod_str = match self.device.get_product_string() {
             Ok(Some(s)) => s,
             Ok(None) | Err(_) => String::new(),
