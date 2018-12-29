@@ -59,7 +59,11 @@ impl Has<Button> for ButtonFrame {
 
 impl Has<Button> for &[u8] {
     fn has(&self, btn: Button) -> bool {
-        self[btn.byte_offset()] & btn.bit_mask() > 0
+        match btn {
+            Button::Sl => self.has(Button::LeftSl) || self.has(Button::RightSl),
+            Button::Sr => self.has(Button::LeftSr) || self.has(Button::RightSr),
+            _ => self[btn.byte_offset()] & btn.bit_mask() > 0,
+        }
     }
 }
 

@@ -57,6 +57,8 @@ fn main() {
             log::e(&format!("{:?}", e));
         }
 
+        println!("{}", driver);
+
         for signal in signals.pending() {
             match signal {
                 SIGINT | SIGTERM => {

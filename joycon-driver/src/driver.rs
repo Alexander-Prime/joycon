@@ -5,8 +5,10 @@ use arraydeque::{ArrayDeque, Wrapping};
 use hidapi::{HidApi, HidDevice, HidError};
 use termion::{color, style};
 
+use common::has::Has;
 use common::log;
 
+use super::button::Button;
 use super::device::{HciState, InputMode};
 use super::frame::{AxisFrame, ButtonFrame, InputFrame, MotionFrame};
 use super::id::{Product, Vendor};
@@ -158,21 +160,19 @@ impl Driver {
         match report {
             InputReport::CommandResponse {
                 battery: _,
-                frame: _,
+                frame,
                 data,
             } => {
+                self.frames.push_back(frame);
                 self.handle_response(data);
             }
-            InputReport::ExtendedInput { battery: _, frame } => self.handle_buttons(frame.buttons),
+            InputReport::ExtendedInput { battery: _, frame } => {
+                self.frames.push_back(frame);
+                ()
+            }
             _ => (),
         }
         Ok(Some(len))
-    }
-
-    fn handle_buttons(&mut self, buttons: ButtonFrame) {
-        let ButtonFrame(buf) = buttons;
-        let buf = &buf[..];
-        log::d(&format!("{}", log::buf(buf)));
     }
 
     fn handle_response(&mut self, data: ResponseData) {
@@ -246,6 +246,23 @@ impl Driver {
             self.spi_mirror[0x55],
         )
     }
+
+    fn button_text(&self, btn: Button, text: &'static str) -> String {
+        if self.has(btn) {
+            text.to_string()
+        } else {
+            " ".repeat(text.chars().count())
+        }
+    }
+}
+
+impl Has<Button> for Driver {
+    fn has(&self, btn: Button) -> bool {
+        match self.frames.back() {
+            None => false,
+            Some(frame) => frame.buttons.has(btn),
+        }
+    }
 }
 
 impl fmt::Display for Driver {
@@ -260,13 +277,32 @@ impl fmt::Display for Driver {
         };
         write!(
             f,
-            "{}{}{} {} [{}] {}",
+            "{}{}{}",
             color::Fg(color::Rgb(btn_r, btn_g, btn_b)),
             color::Bg(color::Rgb(bdy_r, bdy_g, bdy_b)),
             style::Bold,
-            prod_str,
-            self.serial_number(),
-            style::Reset
         )
+        .and_then(|_| write!(f, " {} [{}] ", prod_str, self.serial_number()))
+        .and_then(|_| write!(f, " {} ", self.button_text(Button::Left, "←")))
+        .and_then(|_| write!(f, " {} ", self.button_text(Button::Up, "↑")))
+        .and_then(|_| write!(f, " {} ", self.button_text(Button::Down, "↓")))
+        .and_then(|_| write!(f, " {} ", self.button_text(Button::Right, "→")))
+        .and_then(|_| write!(f, " {} ", self.button_text(Button::Y, "Y")))
+        .and_then(|_| write!(f, " {} ", self.button_text(Button::X, "X")))
+        .and_then(|_| write!(f, " {} ", self.button_text(Button::B, "B")))
+        .and_then(|_| write!(f, " {} ", self.button_text(Button::A, "A")))
+        .and_then(|_| write!(f, " {} ", self.button_text(Button::L, "L")))
+        .and_then(|_| write!(f, " {} ", self.button_text(Button::Zl, "ZL")))
+        .and_then(|_| write!(f, " {} ", self.button_text(Button::R, "R")))
+        .and_then(|_| write!(f, " {} ", self.button_text(Button::Zr, "ZR")))
+        .and_then(|_| write!(f, " {} ", self.button_text(Button::Cl, "CL")))
+        .and_then(|_| write!(f, " {} ", self.button_text(Button::Cr, "CR")))
+        .and_then(|_| write!(f, " {} ", self.button_text(Button::Minus, "-")))
+        .and_then(|_| write!(f, " {} ", self.button_text(Button::Plus, "+")))
+        .and_then(|_| write!(f, " {} ", self.button_text(Button::Home, "Home")))
+        .and_then(|_| write!(f, " {} ", self.button_text(Button::Capture, "Cap")))
+        .and_then(|_| write!(f, " {} ", self.button_text(Button::Sl, "SL")))
+        .and_then(|_| write!(f, " {} ", self.button_text(Button::Sr, "SR")))
+        .and_then(|_| write!(f, "{}", style::Reset))
     }
 }
