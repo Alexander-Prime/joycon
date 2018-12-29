@@ -158,18 +158,12 @@ impl Driver {
         match report {
             InputReport::CommandResponse {
                 battery: _,
-                buttons: _,
-                axes: _,
+                frame: _,
                 data,
             } => {
                 self.handle_response(data);
             }
-            InputReport::ExtendedInput {
-                battery: _,
-                buttons,
-                axes: _,
-                motion: _,
-            } => self.handle_buttons(buttons),
+            InputReport::ExtendedInput { battery: _, frame } => self.handle_buttons(frame.buttons),
             _ => (),
         }
         Ok(Some(len))

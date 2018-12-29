@@ -6,9 +6,9 @@ use super::axis::Axis;
 use super::button::Button;
 
 pub struct InputFrame {
-    buttons: ButtonFrame,
-    axes: AxisFrame,
-    motion: MotionFrame,
+    pub buttons: ButtonFrame,
+    pub axes: AxisFrame,
+    pub motion: MotionFrame,
 }
 
 impl InputFrame {
@@ -21,10 +21,29 @@ impl InputFrame {
     }
 }
 
+impl From<&[u8]> for InputFrame {
+    fn from(buf: &[u8]) -> InputFrame {
+        let buttons = if buf.len() >= 3 { &buf[0..3] } else { &[0; 3] };
+        let axes = if buf.len() >= 9 { &buf[3..9] } else { &[0; 6] };
+        // TODO We actually get 3 motion frames here, should probably average them
+        let motion = if buf.len() >= 45 {
+            &buf[9..45]
+        } else {
+            &[0; 36]
+        };
+
+        InputFrame {
+            buttons: ButtonFrame::from(buttons),
+            axes: AxisFrame::from(axes),
+            motion: MotionFrame::from(motion),
+        }
+    }
+}
+
 #[derive(Default)]
 pub struct ButtonFrame(pub [u8; 3]);
 
-impl<'a> From<&'a [u8]> for ButtonFrame {
+impl From<&[u8]> for ButtonFrame {
     fn from(buf: &[u8]) -> ButtonFrame {
         let mut buttons: [u8; 3] = Default::default();
         buttons.copy_from_slice(&buf);
@@ -32,13 +51,13 @@ impl<'a> From<&'a [u8]> for ButtonFrame {
     }
 }
 
-impl<'a> Has<Button> for ButtonFrame {
+impl Has<Button> for ButtonFrame {
     fn has(&self, btn: Button) -> bool {
         (&self.0[..]).has(btn)
     }
 }
 
-impl<'a> Has<Button> for &'a [u8] {
+impl Has<Button> for &[u8] {
     fn has(&self, btn: Button) -> bool {
         self[btn.byte_offset()] & btn.bit_mask() > 0
     }
@@ -52,7 +71,7 @@ pub struct AxisFrame {
 }
 
 // FIXME this needs to handle 4 axes per frame instead of 2
-impl<'a> From<&'a [u8]> for AxisFrame {
+impl From<&[u8]> for AxisFrame {
     fn from(buf: &[u8]) -> AxisFrame {
         AxisFrame {
             rx: buf[0] as u16 | ((buf[1] as u16 & 0xf) << 8),
@@ -98,7 +117,7 @@ impl MotionFrame {
     }
 }
 
-impl<'a> From<&'a [u8]> for MotionFrame {
+impl From<&[u8]> for MotionFrame {
     fn from(buf: &[u8]) -> MotionFrame {
         MotionFrame {
             accelerometer: (

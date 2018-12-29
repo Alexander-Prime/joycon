@@ -1,6 +1,6 @@
 use byteorder::{ByteOrder, LittleEndian};
 
-use super::frame::{AxisFrame, ButtonFrame, MotionFrame};
+use super::frame::{AxisFrame, ButtonFrame, InputFrame, MotionFrame};
 
 use self::InputReport::*;
 
@@ -9,15 +9,12 @@ type BatteryState = u8;
 pub enum InputReport<'a> {
     CommandResponse {
         battery: BatteryState,
-        buttons: ButtonFrame,
-        axes: AxisFrame,
+        frame: InputFrame,
         data: ResponseData<'a>,
     },
     ExtendedInput {
         battery: BatteryState,
-        buttons: ButtonFrame,
-        axes: AxisFrame,
-        motion: MotionFrame,
+        frame: InputFrame,
     },
     SimpleInput(u16, u8),
     Unknown,
@@ -29,16 +26,13 @@ impl<'a> From<&'a [u8]> for InputReport<'a> {
             0x21 => CommandResponse {
                 // Timer byte at buf[1]
                 battery: buf[2] >> 1,
-                buttons: ButtonFrame::from(&buf[3..6]),
-                axes: AxisFrame::from(&buf[6..12]),
+                frame: InputFrame::from(&buf[3..12]),
                 data: ResponseData::from(&buf[13..49]),
             },
             0x30 | 0x31 | 0x32 | 0x33 => ExtendedInput {
-                battery: buf[1] >> 1,
-                buttons: ButtonFrame::from(&buf[2..5]),
-                axes: AxisFrame::from(&buf[5..11]),
-                // TODO We actually get 3 motion frames here, should probably average them
-                motion: MotionFrame::from(&buf[11..23]),
+                // Timer byte at buf[1]
+                battery: buf[2] >> 1,
+                frame: InputFrame::from(&buf[3..49]),
             },
             0x3f => SimpleInput(LittleEndian::read_u16(&buf[1..4]), buf[3]),
             _ => Unknown,
