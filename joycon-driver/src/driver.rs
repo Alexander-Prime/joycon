@@ -37,6 +37,10 @@ pub struct Driver {
     rumble_counter: Cell<u8>,
     leds: Cell<u8>,
 
+    firmware_version: Option<u16>,
+    product: Option<Product>,
+    mac_address: Option<u64>,
+
     // Maximum Joy-Con packet size, w/ NFC/IR data
     // Most packets won't send more than ~50 bytes
     read_buffer: [u8; 360],
@@ -97,6 +101,10 @@ impl Driver {
             serial_number: serial,
             leds: Cell::new(0x00),
 
+            firmware_version: None,
+            mac_address: None,
+            product: None,
+
             spi_mirror: [0; 0xA000],
 
             read_buffer: [0; 360],
@@ -107,6 +115,8 @@ impl Driver {
         // TODO Find a way to guarantee this isn't racing other input packets
         jc.flush()
             .and_then(|_| jc.set_input_mode(InputMode::Simple))
+            .and_then(|_| jc.await_input())
+            .and_then(|_| jc.get_device_info())
             .and_then(|_| jc.await_input())
             .and_then(|_| jc.read_spi(0x6050, 6))
             .and_then(|_| jc.await_input())
@@ -177,6 +187,15 @@ impl Driver {
 
     fn handle_response(&mut self, data: ResponseData) {
         match data {
+            ResponseData::RequestDeviceInfo {
+                firmware_version,
+                device_type,
+                mac_address,
+            } => {
+                self.firmware_version = Some(firmware_version);
+                self.product = Product::from_device_type(device_type);
+                self.mac_address = Some(mac_address);
+            }
             ResponseData::ReadSpi(chunk) => self.save_spi_chunk(chunk),
             ResponseData::Unknown(buf) => {
                 log::e(&format!(
@@ -224,6 +243,13 @@ impl Driver {
         self.device.write(&<Vec<u8>>::from(cmd))
     }
 
+    fn get_device_info(&self) -> Result<usize, HidError> {
+        let sub = RequestDeviceInfo;
+        let cmd = DoCommand(self.rumble_counter.get(), &NEUTRAL_RUMBLE, sub);
+        let buf = &<Vec<u8>>::from(cmd);
+        self.device.write(buf)
+    }
+
     fn read_spi(&self, addr: u32, length: usize) -> Result<usize, HidError> {
         let sub = ReadSpi(addr, length);
         let cmd = DoCommand(self.rumble_counter.get(), &NEUTRAL_RUMBLE, sub);
@@ -258,9 +284,12 @@ impl Driver {
 
 impl Has<Button> for Driver {
     fn has(&self, btn: Button) -> bool {
-        match self.frames.back() {
-            None => false,
-            Some(frame) => frame.buttons.has(btn),
+        let real_btn = self.product.and_then(|product| btn.to_real(product));
+        let last_frame = self.frames.back();
+
+        match (real_btn, last_frame) {
+            (Some(btn), Some(frame)) => frame.buttons.has(btn),
+            _ => false,
         }
     }
 }
@@ -283,10 +312,10 @@ impl fmt::Display for Driver {
             style::Bold,
         )
         .and_then(|_| write!(f, " {} [{}] ", prod_str, self.serial_number()))
-        .and_then(|_| write!(f, " {} ", self.button_text(Button::North, "↑")))
-        .and_then(|_| write!(f, " {} ", self.button_text(Button::East, "→")))
         .and_then(|_| write!(f, " {} ", self.button_text(Button::West, "←")))
         .and_then(|_| write!(f, " {} ", self.button_text(Button::South, "↓")))
+        .and_then(|_| write!(f, " {} ", self.button_text(Button::North, "↑")))
+        .and_then(|_| write!(f, " {} ", self.button_text(Button::East, "→")))
         .and_then(|_| write!(f, " {} ", self.button_text(Button::L, "L")))
         .and_then(|_| write!(f, " {} ", self.button_text(Button::Zl, "ZL")))
         .and_then(|_| write!(f, " {} ", self.button_text(Button::R, "R")))

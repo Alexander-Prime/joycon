@@ -1,4 +1,4 @@
-use byteorder::{ByteOrder, LittleEndian};
+use byteorder::{BigEndian, ByteOrder, LittleEndian};
 
 use super::frame::{AxisFrame, ButtonFrame, InputFrame, MotionFrame};
 
@@ -41,6 +41,11 @@ impl<'a> From<&'a [u8]> for InputReport<'a> {
 }
 
 pub enum ResponseData<'a> {
+    RequestDeviceInfo {
+        firmware_version: u16,
+        device_type: u8,
+        mac_address: u64,
+    },
     SetInputMode,
     ReadSpi(SpiChunk<'a>),
     SetLeds,
@@ -51,6 +56,11 @@ pub enum ResponseData<'a> {
 impl<'a> From<&'a [u8]> for ResponseData<'a> {
     fn from(buf: &[u8]) -> ResponseData {
         match buf[1] {
+            0x02 => ResponseData::RequestDeviceInfo {
+                firmware_version: LittleEndian::read_u16(&buf[2..4]),
+                device_type: buf[4],
+                mac_address: BigEndian::read_u48(&buf[6..12]),
+            },
             0x03 => ResponseData::SetInputMode,
             0x10 => ResponseData::ReadSpi(SpiChunk::from(&buf[2..])),
             0x30 => ResponseData::SetLeds,

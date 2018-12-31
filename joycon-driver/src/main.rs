@@ -39,13 +39,13 @@ fn main() {
         .or_else(|_| Driver::find(Product::ProController))
     {
         Ok(driver) => driver,
-        Err(e) => panic!("No Joy-Con or Switch Pro Controller devices found"),
+        Err(_) => panic!("No Joy-Con or Switch Pro Controller devices found"),
     };
 
-    if let Err(e) = driver.set_input_mode(InputMode::Full) {
-        log::e(&format!("{:?}", e))
-    }
-    if let Err(e) = driver.set_leds(PENDING_LEDS) {
+    if let Err(e) = driver
+        .set_input_mode(InputMode::Full)
+        .and_then(|_| driver.set_leds(PENDING_LEDS))
+    {
         log::e(&format!("{:?}", e));
     }
 
