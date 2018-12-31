@@ -1,3 +1,5 @@
+use std::fmt;
+
 use byteorder::{ByteOrder, LittleEndian};
 
 use common::has::Has;
@@ -15,7 +17,7 @@ impl InputFrame {
     pub fn new() -> InputFrame {
         InputFrame {
             buttons: Default::default(),
-            axes: AxisFrame::new(),
+            axes: Default::default(),
             motion: MotionFrame::new(),
         }
     }
@@ -55,6 +57,7 @@ impl Has<Button> for ButtonFrame {
     }
 }
 
+#[derive(Copy, Clone)]
 pub struct AxisFrame {
     pub rx: u16,
     pub ry: u16,
@@ -64,18 +67,19 @@ pub struct AxisFrame {
 
 // FIXME this needs to handle 4 axes per frame instead of 2
 impl From<&[u8]> for AxisFrame {
-    fn from(buf: &[u8]) -> AxisFrame {
+    fn from(buf: &[u8]) -> Self {
+        let axes = LittleEndian::read_u48(buf);
         AxisFrame {
-            rx: buf[0] as u16 | ((buf[1] as u16 & 0xf) << 8),
-            ry: (buf[1] as u16 >> 4) | ((buf[2] as u16) << 4),
-            lx: 0,
-            ly: 0,
+            rx: (axes >> 36 & 0xfff) as u16,
+            ry: (axes >> 24 & 0xfff) as u16,
+            lx: (axes >> 12 & 0xfff) as u16,
+            ly: (axes & 0xfff) as u16,
         }
     }
 }
 
-impl AxisFrame {
-    pub fn new() -> AxisFrame {
+impl Default for AxisFrame {
+    fn default() -> Self {
         AxisFrame {
             // 12 bits each
             rx: 0x800,
@@ -84,14 +88,15 @@ impl AxisFrame {
             ly: 0x800,
         }
     }
+}
 
-    fn get(&self, axis: Axis) -> u16 {
-        match axis {
-            Axis::Rx => self.rx,
-            Axis::Ry => self.ry,
-            Axis::Lx => self.lx,
-            Axis::Ly => self.ly,
-        }
+impl fmt::Display for AxisFrame {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(
+            f,
+            "L[{:04}, {:04}] R[{:04}, {:04}]",
+            self.lx, self.ly, self.rx, self.ry
+        )
     }
 }
 

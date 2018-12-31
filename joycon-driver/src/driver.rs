@@ -312,22 +312,38 @@ impl fmt::Display for Driver {
             style::Bold,
         )
         .and_then(|_| write!(f, " {} [{}] ", prod_str, self.serial_number()))
-        .and_then(|_| write!(f, " {} ", self.button_text(Button::West, "←")))
-        .and_then(|_| write!(f, " {} ", self.button_text(Button::South, "↓")))
-        .and_then(|_| write!(f, " {} ", self.button_text(Button::North, "↑")))
-        .and_then(|_| write!(f, " {} ", self.button_text(Button::East, "→")))
-        .and_then(|_| write!(f, " {} ", self.button_text(Button::L, "L")))
-        .and_then(|_| write!(f, " {} ", self.button_text(Button::Zl, "ZL")))
-        .and_then(|_| write!(f, " {} ", self.button_text(Button::R, "R")))
-        .and_then(|_| write!(f, " {} ", self.button_text(Button::Zr, "ZR")))
-        .and_then(|_| write!(f, " {} ", self.button_text(Button::Cl, "CL")))
-        .and_then(|_| write!(f, " {} ", self.button_text(Button::Cr, "CR")))
-        .and_then(|_| write!(f, " {} ", self.button_text(Button::Minus, "-")))
-        .and_then(|_| write!(f, " {} ", self.button_text(Button::Plus, "+")))
-        .and_then(|_| write!(f, " {} ", self.button_text(Button::Home, "Home")))
-        .and_then(|_| write!(f, " {} ", self.button_text(Button::Capture, "Cap")))
-        .and_then(|_| write!(f, " {} ", self.button_text(Button::Sl, "SL")))
-        .and_then(|_| write!(f, " {} ", self.button_text(Button::Sr, "SR")))
+        .and_then(|_| {
+            write!(
+                f,
+                " {} ",
+                self.frames
+                    .back()
+                    .map(|frame| frame.axes)
+                    .unwrap_or(Default::default())
+            )
+        })
+        .and_then(|_| {
+            write!(
+                f,
+                " {} {} {} {} {} {} {} {} {} {} {} {} {} {} {} {} ",
+                self.button_text(Button::West, "←"),
+                self.button_text(Button::South, "↓"),
+                self.button_text(Button::North, "↑"),
+                self.button_text(Button::East, "→"),
+                self.button_text(Button::L, "L"),
+                self.button_text(Button::Zl, "ZL"),
+                self.button_text(Button::R, "R"),
+                self.button_text(Button::Zr, "ZR"),
+                self.button_text(Button::Cl, "CL"),
+                self.button_text(Button::Cr, "CR"),
+                self.button_text(Button::Minus, "-"),
+                self.button_text(Button::Plus, "+"),
+                self.button_text(Button::Home, "Home"),
+                self.button_text(Button::Capture, "Cap"),
+                self.button_text(Button::Sl, "SL"),
+                self.button_text(Button::Sr, "SR")
+            )
+        })
         .and_then(|_| write!(f, "{}", style::Reset))
     }
 }
