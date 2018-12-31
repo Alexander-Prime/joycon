@@ -51,7 +51,6 @@ fn main() {
 
     println!("Connected to {}", driver);
 
-    // Show a moving LED pattern to confirm we're connected and running
     'main: loop {
         if let Err(e) = driver.flush() {
             log::e(&format!("{:?}", e));

@@ -41,29 +41,17 @@ impl From<&[u8]> for InputFrame {
 }
 
 #[derive(Default)]
-pub struct ButtonFrame(pub [u8; 3]);
+pub struct ButtonFrame(pub u32);
 
 impl From<&[u8]> for ButtonFrame {
     fn from(buf: &[u8]) -> ButtonFrame {
-        let mut buttons: [u8; 3] = Default::default();
-        buttons.copy_from_slice(&buf);
-        ButtonFrame(buttons)
+        ButtonFrame(LittleEndian::read_u24(buf))
     }
 }
 
 impl Has<Button> for ButtonFrame {
     fn has(&self, btn: Button) -> bool {
-        (&self.0[..]).has(btn)
-    }
-}
-
-impl Has<Button> for &[u8] {
-    fn has(&self, btn: Button) -> bool {
-        match btn {
-            Button::Sl => self.has(Button::LeftSl) || self.has(Button::RightSl),
-            Button::Sr => self.has(Button::LeftSr) || self.has(Button::RightSr),
-            _ => self[btn.byte_offset()] & btn.bit_mask() > 0,
-        }
+        self.0 & <u32>::from(btn) > 0
     }
 }
 
