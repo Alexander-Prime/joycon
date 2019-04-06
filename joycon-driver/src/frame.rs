@@ -3,8 +3,8 @@ use std::fmt;
 use byteorder::{ByteOrder, LittleEndian};
 
 use common::has::Has;
+use common::range::map_range;
 
-use super::axis::Axis;
 use super::button::Button;
 
 pub struct InputFrame {
@@ -59,22 +59,63 @@ impl Has<Button> for ButtonFrame {
 
 #[derive(Copy, Clone)]
 pub struct AxisFrame {
-    pub rx: u16,
-    pub ry: u16,
     pub lx: u16,
     pub ly: u16,
+    pub rx: u16,
+    pub ry: u16,
 }
 
-// FIXME this needs to handle 4 axes per frame instead of 2
+impl AxisFrame {
+    pub fn to_calibrated(&self, cal: &[u8]) -> (f64, f64, f64, f64) {
+        let l_cal = &cal[..9];
+        let r_cal = &cal[9..];
+
+        // Calibration data is layed out differently for left & right sticks :/
+        let (lx, ly) =
+            AxisFrame::calibrate_stick((self.lx, self.ly), &l_cal[..3], &l_cal[3..6], &l_cal[6..9]);
+        let (rx, ry) =
+            AxisFrame::calibrate_stick((self.rx, self.ry), &r_cal[6..9], &r_cal[..3], &r_cal[3..6]);
+        (lx, ly, rx, ry)
+    }
+
+    fn calibrate_stick(
+        raw: (u16, u16),
+        cal_max: &[u8],
+        cal_cen: &[u8],
+        cal_min: &[u8],
+    ) -> (f64, f64) {
+        let (x, y) = raw;
+
+        // // Extract 12-bit actual values
+        let (max_x, max_y) = AxisFrame::u12_pair_from_bytes(&cal_max);
+        let (cen_x, cen_y) = AxisFrame::u12_pair_from_bytes(&cal_cen);
+        let (min_x, min_y) = AxisFrame::u12_pair_from_bytes(&cal_min);
+
+        // // Align range around calibrated center
+        let max_x: f64 = <f64>::from(cen_x) + <f64>::from(max_x);
+        let max_y: f64 = <f64>::from(cen_y) + <f64>::from(max_y);
+        let min_x: f64 = <f64>::from(cen_x) - <f64>::from(min_x);
+        let min_y: f64 = <f64>::from(cen_y) - <f64>::from(min_y);
+
+        // Normalize to -1..1
+        let target_range = (-1f64, 1f64);
+        (
+            map_range(x.into(), (min_x, max_x), target_range),
+            map_range(y.into(), (min_y, max_y), target_range),
+        )
+    }
+
+    fn u12_pair_from_bytes(buf: &[u8]) -> (u16, u16) {
+        let pair = LittleEndian::read_u24(buf);
+        ((pair & 0xfff) as u16, (pair >> 12) as u16)
+    }
+}
+
 impl From<&[u8]> for AxisFrame {
     fn from(buf: &[u8]) -> Self {
-        let axes = LittleEndian::read_u48(buf);
-        AxisFrame {
-            rx: (axes >> 36 & 0xfff) as u16,
-            ry: (axes >> 24 & 0xfff) as u16,
-            lx: (axes >> 12 & 0xfff) as u16,
-            ly: (axes & 0xfff) as u16,
-        }
+        let (lx, ly) = AxisFrame::u12_pair_from_bytes(&buf[..3]);
+        let (rx, ry) = AxisFrame::u12_pair_from_bytes(&buf[3..6]);
+        AxisFrame { lx, ly, rx, ry }
     }
 }
 

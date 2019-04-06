@@ -118,7 +118,7 @@ impl Driver {
             .and_then(|_| jc.await_input())
             .and_then(|_| jc.get_device_info())
             .and_then(|_| jc.await_input())
-            .and_then(|_| jc.read_spi(0x6050, 6))
+            .and_then(|_| jc.read_spi(0x603d, 24)) // Calibration and colors
             .and_then(|_| jc.await_input())
             .and_then(|_| Ok(jc))
     }
@@ -304,6 +304,11 @@ impl fmt::Display for Driver {
             Ok(Some(s)) => s,
             Ok(None) | Err(_) => String::new(),
         };
+        let axes = self
+            .frames
+            .back()
+            .map(|frame| frame.axes.to_calibrated(&self.spi_mirror[0x3d..0x4f]))
+            .unwrap_or((0.0, 0.0, 0.0, 0.0));
         write!(
             f,
             "{}{}{}",
@@ -315,11 +320,8 @@ impl fmt::Display for Driver {
         .and_then(|_| {
             write!(
                 f,
-                " {} ",
-                self.frames
-                    .back()
-                    .map(|frame| frame.axes)
-                    .unwrap_or(Default::default())
+                " {:>7.4} {:>7.4} {:>7.4} {:>7.4} ",
+                axes.0, axes.1, axes.2, axes.3
             )
         })
         .and_then(|_| {
