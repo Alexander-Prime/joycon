@@ -1,6 +1,10 @@
+pub mod axis;
+pub mod button;
+pub mod frame;
+
 use byteorder::{BigEndian, ByteOrder, LittleEndian};
 
-use super::frame::{AxisFrame, ButtonFrame, InputFrame, MotionFrame};
+use frame::{AxisFrame, ButtonFrame, InputFrame, MotionFrame};
 
 use self::InputReport::*;
 
@@ -21,7 +25,7 @@ pub enum InputReport<'a> {
 }
 
 impl<'a> From<&'a [u8]> for InputReport<'a> {
-    fn from(buf: &[u8]) -> InputReport {
+    fn from(buf: &[u8]) -> InputReport<'_> {
         match buf[0] {
             0x21 => CommandResponse {
                 // Timer byte at buf[1]
@@ -54,7 +58,7 @@ pub enum ResponseData<'a> {
 }
 
 impl<'a> From<&'a [u8]> for ResponseData<'a> {
-    fn from(buf: &[u8]) -> ResponseData {
+    fn from(buf: &[u8]) -> ResponseData<'_> {
         match buf[1] {
             0x02 => ResponseData::RequestDeviceInfo {
                 firmware_version: LittleEndian::read_u16(&buf[2..4]),
@@ -73,7 +77,7 @@ impl<'a> From<&'a [u8]> for ResponseData<'a> {
 pub struct SpiChunk<'a>(pub u16, pub &'a [u8]);
 
 impl<'a> From<&'a [u8]> for SpiChunk<'a> {
-    fn from(buf: &'a [u8]) -> SpiChunk {
+    fn from(buf: &'a [u8]) -> SpiChunk<'_> {
         let addr = LittleEndian::read_u16(&buf[..4]);
         let size = buf[4] as usize;
         let buf = &buf[5..5 + size];

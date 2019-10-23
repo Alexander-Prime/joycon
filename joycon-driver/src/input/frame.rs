@@ -132,7 +132,7 @@ impl Default for AxisFrame {
 }
 
 impl fmt::Display for AxisFrame {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(
             f,
             "L[{:04}, {:04}] R[{:04}, {:04}]",

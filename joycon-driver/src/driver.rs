@@ -8,12 +8,12 @@ use termion::{color, style};
 use common::has::Has;
 use common::log;
 
-use super::button::Button;
-use super::device::{HciState, InputMode};
-use super::frame::{AxisFrame, ButtonFrame, InputFrame, MotionFrame};
-use super::id::{Product, Vendor};
-use super::input::{InputReport, ResponseData, SpiChunk};
-use super::output::{Command::*, OutputReport::*, NEUTRAL_RUMBLE};
+use crate::device::id::{Product, Vendor};
+use crate::device::{HciState, InputMode};
+use crate::input::button::Button;
+use crate::input::frame::{AxisFrame, ButtonFrame, InputFrame, MotionFrame};
+use crate::input::{InputReport, ResponseData, SpiChunk};
+use crate::output::{Command::*, OutputReport::*, NEUTRAL_RUMBLE};
 
 fn init_api() -> HidApi {
     match HidApi::new() {
@@ -185,7 +185,7 @@ impl Driver {
         Ok(Some(len))
     }
 
-    fn handle_response(&mut self, data: ResponseData) {
+    fn handle_response(&mut self, data: ResponseData<'_>) {
         match data {
             ResponseData::RequestDeviceInfo {
                 firmware_version,
@@ -208,7 +208,7 @@ impl Driver {
         }
     }
 
-    fn save_spi_chunk(&mut self, chunk: SpiChunk) {
+    fn save_spi_chunk(&mut self, chunk: SpiChunk<'_>) {
         let SpiChunk(addr, buf) = chunk;
         let start = (addr - SPI_ORIGIN) as usize;
         let end = start + buf.len();
@@ -297,7 +297,7 @@ impl Has<Button> for Driver {
 impl fmt::Display for Driver {
     /// Creates a string identifying this device, including its name and serial
     /// number, formatted with the device's physical colors
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         let ((bdy_r, bdy_g, bdy_b), (btn_r, btn_g, btn_b)) =
             (self.body_color(), self.button_color());
         let prod_str = match self.device.get_product_string() {

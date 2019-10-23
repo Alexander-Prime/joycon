@@ -1,3 +1,5 @@
+pub mod id;
+
 pub enum InputMode {
     Full,
     NfcIr,

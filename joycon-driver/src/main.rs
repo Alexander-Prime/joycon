@@ -1,30 +1,14 @@
-extern crate arraydeque;
-extern crate byteorder;
-extern crate getopts;
-extern crate hidapi;
-extern crate signal_hook;
-extern crate termion;
-
-extern crate common;
-
-mod axis;
-mod button;
 mod device;
 mod driver;
-mod frame;
-mod id;
 mod input;
 mod output;
-
-use std::time::Instant;
 
 use signal_hook::{iterator::Signals, SIGINT, SIGTERM};
 
 use common::log;
 
-use device::InputMode;
-use driver::Driver;
-use id::Product;
+use crate::device::{id::Product, InputMode};
+use crate::driver::Driver;
 
 const PENDING_LEDS: u8 = 0b1111_0000;
 

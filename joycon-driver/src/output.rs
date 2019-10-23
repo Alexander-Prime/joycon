@@ -17,7 +17,7 @@ pub enum OutputReport<'a> {
 }
 
 impl<'a> From<&'a OutputReport<'a>> for u8 {
-    fn from(rpt: &OutputReport) -> u8 {
+    fn from(rpt: &OutputReport<'_>) -> u8 {
         match rpt {
             DoCommand(_, _, _) => 0x01,
             Rumble(_, _) => 0x10,
@@ -26,7 +26,7 @@ impl<'a> From<&'a OutputReport<'a>> for u8 {
 }
 
 impl<'a> From<OutputReport<'a>> for Vec<u8> {
-    fn from(rpt: OutputReport) -> Vec<u8> {
+    fn from(rpt: OutputReport<'_>) -> Vec<u8> {
         let mut buf = <Vec<u8>>::with_capacity(11);
         buf.push(u8::from(&rpt));
 

@@ -1,4 +1,4 @@
-use super::id::Product;
+use crate::device::id::Product;
 
 use self::Button::*;
 
