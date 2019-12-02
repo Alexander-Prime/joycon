@@ -1,57 +1,27 @@
 mod device;
 mod driver;
 mod input;
+mod io;
 mod output;
 
-use signal_hook::{iterator::Signals, SIGINT, SIGTERM};
-
-use common::log;
-
-use crate::device::{id::Product, InputMode};
 use crate::driver::Driver;
-
-const PENDING_LEDS: u8 = 0b1111_0000;
+use crate::io::console::{ConsoleReader, ConsoleWriter};
 
 fn main() {
-    let signals = match Signals::new(&[SIGINT, SIGTERM]) {
-        Ok(signals) => signals,
-        Err(e) => panic!(e),
-    };
+    let device_id = "98:B6:E9:75:53:36";
 
-    let mut driver = match Driver::find(Product::JoyConL)
-        .or_else(|_| Driver::find(Product::JoyConR))
-        .or_else(|_| Driver::find(Product::ProController))
-    {
-        Ok(driver) => driver,
-        Err(_) => panic!("No Joy-Con or Switch Pro Controller devices found"),
-    };
+    let socket_path = format!("/var/run/joycond/{}.fifo", device_id);
 
-    if let Err(e) = driver
-        .set_input_mode(InputMode::Full)
-        .and_then(|_| driver.set_leds(PENDING_LEDS))
-    {
-        log::e(&format!("{:?}", e));
-    }
+    let console_reader = ConsoleReader::open().unwrap();
+    let console_writer = ConsoleWriter::open().unwrap();
 
-    println!("Connected to {}", driver);
+    let driver = Driver::for_serial_number(device_id)
+        .with_reader(Box::new(console_reader))
+        .with_writer(Box::new(console_writer))
+        // .with_reader(socket_reader)
+        // .with_writer(socket_writer)
+        .build()
+        .unwrap();
 
-    'main: loop {
-        if let Err(e) = driver.flush() {
-            log::e(&format!("{:?}", e));
-        }
-
-        println!("{}", driver);
-
-        for signal in signals.pending() {
-            match signal {
-                SIGINT | SIGTERM => {
-                    if let Err(e) = driver.reset() {
-                        println!("{}", e);
-                    }
-                    break 'main;
-                }
-                _ => unreachable!(),
-            }
-        }
-    }
+    driver.listen();
 }

@@ -1,351 +1,60 @@
-use std::cell::Cell;
-use std::fmt;
-
 use arraydeque::{ArrayDeque, Wrapping};
-use hidapi::{HidApi, HidDevice, HidError};
-use termion::{color, style};
+use hidapi::HidResult;
 
-use common::has::Has;
-use common::log;
-
-use crate::device::id::{Product, Vendor};
-use crate::device::{HciState, InputMode};
-use crate::input::button::Button;
-use crate::input::frame::{AxisFrame, ButtonFrame, InputFrame, MotionFrame};
-use crate::input::{InputReport, ResponseData, SpiChunk};
-use crate::output::{Command::*, OutputReport::*, NEUTRAL_RUMBLE};
-
-fn init_api() -> HidApi {
-    match HidApi::new() {
-        Ok(api) => api,
-        Err(e) => {
-            log::wtf("Couldn't initialize HidApi");
-            panic!(e);
-        }
-    }
-}
+use crate::device::frame::InputFrame;
+use crate::device::Device;
+use crate::io::{Reader, Writer};
 
 // Offset in SPI memory that `spi_mirror` begins at
 const SPI_ORIGIN: u16 = 0x6000;
 
-const DEFAULT_BODY_COLOR: (u8, u8, u8) = (0x40, 0x40, 0x40);
-const DEFAULT_BUTTON_COLOR: (u8, u8, u8) = (0x1c, 0x1c, 0x1c);
+const PENDING_LEDS: u8 = 0b1111_0000;
 
 pub struct Driver {
-    device: HidDevice,
-    serial_number: String,
-    rumble_counter: Cell<u8>,
-    leds: Cell<u8>,
-
-    firmware_version: Option<u16>,
-    product: Option<Product>,
-    mac_address: Option<u64>,
-
-    // Maximum Joy-Con packet size, w/ NFC/IR data
-    // Most packets won't send more than ~50 bytes
-    read_buffer: [u8; 360],
-
-    // Mirror of a subset of the Joy-Con's internal flash memory
-    spi_mirror: [u8; 0xA000],
-
+    device: Device,
     frames: ArrayDeque<[InputFrame; 32], Wrapping>,
 }
 
 impl Driver {
-    /// Constructs a new Driver for the first device matching the given product ID
-    pub fn find(product: Product) -> Result<Driver, HidError> {
-        let api = init_api();
-        match api.open(Vendor::Nintendo as u16, product as u16) {
-            Ok(device) => Driver::for_device(device),
-            Err(e) => Err(e),
+    pub fn for_serial_number(serial_number: &str) -> DriverBuilder {
+        DriverBuilder {
+            serial_number: String::from(serial_number),
+            readers: Default::default(),
+            writers: Default::default(),
         }
     }
 
-    /// Constructs a new Driver for the device matching the given serial number
-    pub fn for_serial(serial: &str) -> Result<Driver, HidError> {
-        let api = init_api();
-        let device_info = api.devices().iter().find(|dev| match &dev.serial_number {
-            Some(s) if s == serial => true,
-            Some(_) | None => false,
-        });
-        let device_info = match device_info {
-            Some(d) => d,
-            None => {
-                return Err(HidError::HidApiError {
-                    message: format!("Couldn't find a device matching serial \"{}\"", serial),
-                })
-            }
-        };
+    pub async fn listen(&self) {}
+}
 
-        let device = match api.open_path(&device_info.path) {
-            Ok(dev) => dev,
-            Err(e) => return Err(e),
-        };
-        return Driver::for_device(device);
+pub struct DriverBuilder {
+    serial_number: String,
+    readers: Vec<Box<dyn Reader>>,
+    writers: Vec<Box<dyn Writer>>,
+}
+
+impl DriverBuilder {
+    pub fn with_reader(self, reader: Box<dyn Reader>) -> Self {
+        self
     }
 
-    fn for_device(device: HidDevice) -> Result<Driver, HidError> {
-        let serial = match device.get_serial_number_string() {
-            Ok(Some(s)) => s,
-            Ok(None) => String::new(),
-            Err(e) => return Err(e),
-        };
+    pub fn with_writer(self, writer: Box<dyn Writer>) -> Self {
+        self
+    }
 
-        if let Err(e) = device.set_blocking_mode(false) {
-            return Err(e);
-        }
-
-        let mut jc = Driver {
+    pub fn build(self) -> HidResult<Driver> {
+        Device::for_serial_number(&self.serial_number).map(|device| Driver {
             device,
-            rumble_counter: Cell::new(0),
-            serial_number: serial,
-            leds: Cell::new(0x00),
-
-            firmware_version: None,
-            mac_address: None,
-            product: None,
-
-            spi_mirror: [0; 0xA000],
-
-            read_buffer: [0; 360],
-
-            frames: ArrayDeque::new(),
-        };
-
+            frames: ArrayDeque::default(),
+        })
         // TODO Find a way to guarantee this isn't racing other input packets
-        jc.flush()
-            .and_then(|_| jc.set_input_mode(InputMode::Simple))
-            .and_then(|_| jc.await_input())
-            .and_then(|_| jc.get_device_info())
-            .and_then(|_| jc.await_input())
-            .and_then(|_| jc.read_spi(0x603d, 24)) // Calibration and colors
-            .and_then(|_| jc.await_input())
-            .and_then(|_| Ok(jc))
-    }
-
-    /// Read and handle all buffered inputs. Blocks until the queue is emptied.
-    /// On success, returns `Ok(len)`, where `len` is the number of inputs that were flushed.
-    pub fn flush(&mut self) -> Result<usize, HidError> {
-        let mut count = 0;
-        loop {
-            match self.handle_input() {
-                Ok(None) => return Ok(count),
-                Err(e) => return Err(e),
-                _ => count += 1,
-            }
-        }
-    }
-
-    /// Block until the next input packet and handle it with `handle_input()`
-    fn await_input(&mut self) -> Result<usize, HidError> {
-        // TODO Investigate whether `set_blocking_mode()` introduces any overhead
-        if let Err(e) = self.device.set_blocking_mode(true) {
-            return Err(e);
-        };
-        let result = match self.handle_input() {
-            Ok(Some(value)) => Ok(value),
-            Ok(None) => Ok(0),
-            Err(e) => Err(e),
-        };
-        if let Err(e) = self.device.set_blocking_mode(false) {
-            return Err(e);
-        };
-        result
-    }
-
-    /// Receive an input packet, read its input report code, and handle the rest
-    /// of its data appropriately. Callers cannot access this data directly;
-    /// instead, the data is saved to the controller's state and can be read
-    /// after `handle_input()` returns.
-    fn handle_input(&mut self) -> Result<Option<usize>, HidError> {
-        let mut buf = self.read_buffer;
-
-        let len = match self.device.read(&mut buf[..]) {
-            Ok(0) => return Ok(None),
-            Err(e) => return Err(e),
-            Ok(len) => len,
-        };
-
-        let report = InputReport::from(&buf[..]);
-        match report {
-            InputReport::CommandResponse {
-                battery: _,
-                frame,
-                data,
-            } => {
-                self.frames.push_back(frame);
-                self.handle_response(data);
-            }
-            InputReport::ExtendedInput { battery: _, frame } => {
-                self.frames.push_back(frame);
-                ()
-            }
-            _ => (),
-        }
-        Ok(Some(len))
-    }
-
-    fn handle_response(&mut self, data: ResponseData<'_>) {
-        match data {
-            ResponseData::RequestDeviceInfo {
-                firmware_version,
-                device_type,
-                mac_address,
-            } => {
-                self.firmware_version = Some(firmware_version);
-                self.product = Product::from_device_type(device_type);
-                self.mac_address = Some(mac_address);
-            }
-            ResponseData::ReadSpi(chunk) => self.save_spi_chunk(chunk),
-            ResponseData::Unknown(buf) => {
-                log::e(&format!(
-                    "Received unknown response ACK {}",
-                    log::buf(&buf[..2])
-                ));
-                log::e(&log::buf(buf))
-            }
-            _ => (),
-        }
-    }
-
-    fn save_spi_chunk(&mut self, chunk: SpiChunk<'_>) {
-        let SpiChunk(addr, buf) = chunk;
-        let start = (addr - SPI_ORIGIN) as usize;
-        let end = start + buf.len();
-        self.spi_mirror[start..end].copy_from_slice(buf);
-    }
-
-    pub fn serial_number(&self) -> &str {
-        &self.serial_number
-    }
-
-    pub fn set_leds(&self, bitmask: u8) -> Result<usize, HidError> {
-        if bitmask == self.leds.replace(bitmask) {
-            return Ok(0);
-        }
-        let sub = SetLeds(bitmask);
-        let cmd = DoCommand(self.rumble_counter.get(), &NEUTRAL_RUMBLE, sub);
-        self.device.write(&<Vec<u8>>::from(cmd))
-    }
-
-    pub fn set_input_mode(&self, mode: InputMode) -> Result<usize, HidError> {
-        let sub = SetInputMode(mode);
-        let cmd = DoCommand(self.rumble_counter.get(), &NEUTRAL_RUMBLE, sub);
-        self.device.write(&<Vec<u8>>::from(cmd))
-    }
-
-    pub fn reset(&self) -> Result<usize, HidError> {
-        if let Err(e) = self.set_input_mode(InputMode::Simple) {
-            return Err(e);
-        };
-        let sub = SetHciState(HciState::Reconnect);
-        let cmd = DoCommand(self.rumble_counter.get(), &NEUTRAL_RUMBLE, sub);
-        self.device.write(&<Vec<u8>>::from(cmd))
-    }
-
-    fn get_device_info(&self) -> Result<usize, HidError> {
-        let sub = RequestDeviceInfo;
-        let cmd = DoCommand(self.rumble_counter.get(), &NEUTRAL_RUMBLE, sub);
-        let buf = &<Vec<u8>>::from(cmd);
-        self.device.write(buf)
-    }
-
-    fn read_spi(&self, addr: u32, length: usize) -> Result<usize, HidError> {
-        let sub = ReadSpi(addr, length);
-        let cmd = DoCommand(self.rumble_counter.get(), &NEUTRAL_RUMBLE, sub);
-        let buf = &<Vec<u8>>::from(cmd);
-        self.device.write(buf)
-    }
-
-    pub fn body_color(&self) -> (u8, u8, u8) {
-        (
-            self.spi_mirror[0x50],
-            self.spi_mirror[0x51],
-            self.spi_mirror[0x52],
-        )
-    }
-
-    pub fn button_color(&self) -> (u8, u8, u8) {
-        (
-            self.spi_mirror[0x53],
-            self.spi_mirror[0x54],
-            self.spi_mirror[0x55],
-        )
-    }
-
-    fn button_text(&self, btn: Button, text: &'static str) -> String {
-        if self.has(btn) {
-            text.to_string()
-        } else {
-            " ".repeat(text.chars().count())
-        }
-    }
-}
-
-impl Has<Button> for Driver {
-    fn has(&self, btn: Button) -> bool {
-        let real_btn = self.product.and_then(|product| btn.to_real(product));
-        let last_frame = self.frames.back();
-
-        match (real_btn, last_frame) {
-            (Some(btn), Some(frame)) => frame.buttons.has(btn),
-            _ => false,
-        }
-    }
-}
-
-impl fmt::Display for Driver {
-    /// Creates a string identifying this device, including its name and serial
-    /// number, formatted with the device's physical colors
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        let ((bdy_r, bdy_g, bdy_b), (btn_r, btn_g, btn_b)) =
-            (self.body_color(), self.button_color());
-        let prod_str = match self.device.get_product_string() {
-            Ok(Some(s)) => s,
-            Ok(None) | Err(_) => String::new(),
-        };
-        let axes = self
-            .frames
-            .back()
-            .map(|frame| frame.axes.to_calibrated(&self.spi_mirror[0x3d..0x4f]))
-            .unwrap_or((0.0, 0.0, 0.0, 0.0));
-        write!(
-            f,
-            "{}{}{}",
-            color::Fg(color::Rgb(btn_r, btn_g, btn_b)),
-            color::Bg(color::Rgb(bdy_r, bdy_g, bdy_b)),
-            style::Bold,
-        )
-        .and_then(|_| write!(f, " {} [{}] ", prod_str, self.serial_number()))
-        .and_then(|_| {
-            write!(
-                f,
-                " {:>7.4} {:>7.4} {:>7.4} {:>7.4} ",
-                axes.0, axes.1, axes.2, axes.3
-            )
-        })
-        .and_then(|_| {
-            write!(
-                f,
-                " {} {} {} {} {} {} {} {} {} {} {} {} {} {} {} {} ",
-                self.button_text(Button::West, "←"),
-                self.button_text(Button::South, "↓"),
-                self.button_text(Button::North, "↑"),
-                self.button_text(Button::East, "→"),
-                self.button_text(Button::L, "L"),
-                self.button_text(Button::Zl, "ZL"),
-                self.button_text(Button::R, "R"),
-                self.button_text(Button::Zr, "ZR"),
-                self.button_text(Button::Cl, "CL"),
-                self.button_text(Button::Cr, "CR"),
-                self.button_text(Button::Minus, "-"),
-                self.button_text(Button::Plus, "+"),
-                self.button_text(Button::Home, "Home"),
-                self.button_text(Button::Capture, "Cap"),
-                self.button_text(Button::Sl, "SL"),
-                self.button_text(Button::Sr, "SR")
-            )
-        })
-        .and_then(|_| write!(f, "{}", style::Reset))
+        // device.flush()
+        //     .and_then(|_| device.set_input_mode(InputMode::Simple))
+        //     .and_then(|_| device.await_input())
+        //     .and_then(|_| device.get_device_info())
+        //     .and_then(|_| device.await_input())
+        //     .and_then(|_| device.read_spi(0x603d, 24)) // Calibration and colors
+        //     .and_then(|_| device.await_input())
+        //     .and_then(|_| Ok(device))
     }
 }

@@ -1,12 +1,8 @@
-pub mod axis;
-pub mod button;
-pub mod frame;
-
 use byteorder::{BigEndian, ByteOrder, LittleEndian};
 
-use frame::{AxisFrame, ButtonFrame, InputFrame, MotionFrame};
+use crate::device::frame::InputFrame;
 
-use self::InputReport::*;
+use InputReport::*;
 
 type BatteryState = u8;
 
