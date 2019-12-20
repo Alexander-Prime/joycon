@@ -11,13 +11,13 @@ pub const NEUTRAL_RUMBLE: [u8; 8] = [
     0x01, 0x40, 0x40,
 ];
 
-pub enum OutputReport<'a> {
-    DoCommand(u8, &'a [u8], Command),
-    Rumble(u8, &'a [u8]),
+pub enum OutputReport {
+    DoCommand(u8, Vec<u8>, Command),
+    Rumble(u8, Vec<u8>),
 }
 
-impl<'a> From<&'a OutputReport<'a>> for u8 {
-    fn from(rpt: &OutputReport<'_>) -> u8 {
+impl From<&OutputReport> for u8 {
+    fn from(rpt: &OutputReport) -> u8 {
         match rpt {
             DoCommand(_, _, _) => 0x01,
             Rumble(_, _) => 0x10,
@@ -25,20 +25,20 @@ impl<'a> From<&'a OutputReport<'a>> for u8 {
     }
 }
 
-impl<'a> From<OutputReport<'a>> for Vec<u8> {
-    fn from(rpt: OutputReport<'_>) -> Vec<u8> {
+impl From<OutputReport> for Vec<u8> {
+    fn from(rpt: OutputReport) -> Vec<u8> {
         let mut buf = <Vec<u8>>::with_capacity(11);
         buf.push(u8::from(&rpt));
 
         match rpt {
             DoCommand(counter, rumble, cmd) => {
                 buf.push(counter);
-                buf.extend_from_slice(rumble);
+                buf.extend_from_slice(&rumble);
                 buf.extend_from_slice(&<Vec<u8>>::from(cmd));
             }
             Rumble(counter, rumble) => {
                 buf.push(counter);
-                buf.extend_from_slice(rumble);
+                buf.extend_from_slice(&rumble);
             }
         }
 
@@ -55,7 +55,7 @@ pub enum Command {
     Unknown,
 }
 
-impl<'a> From<&'a [u8]> for Command {
+impl From<&[u8]> for Command {
     fn from(buf: &[u8]) -> Command {
         match buf[0] {
             0x02 => RequestDeviceInfo,
@@ -68,8 +68,8 @@ impl<'a> From<&'a [u8]> for Command {
     }
 }
 
-impl<'a> From<&'a Command> for u8 {
-    fn from(cmd: &'a Command) -> u8 {
+impl From<&Command> for u8 {
+    fn from(cmd: &Command) -> u8 {
         match cmd {
             RequestDeviceInfo => 0x02,
             SetInputMode(_) => 0x03,
@@ -81,7 +81,7 @@ impl<'a> From<&'a Command> for u8 {
     }
 }
 
-impl<'a> From<Command> for Vec<u8> {
+impl From<Command> for Vec<u8> {
     fn from(cmd: Command) -> Vec<u8> {
         let mut buf = <Vec<u8>>::with_capacity(1);
         buf.push(u8::from(&cmd));

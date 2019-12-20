@@ -1,9 +1,10 @@
 use arraydeque::{ArrayDeque, Wrapping};
-use hidapi::HidResult;
+use async_std::sync::{channel, Receiver, Sender};
+use async_std::task;
 
 use crate::device::frame::InputFrame;
 use crate::device::Device;
-use crate::io::{Reader, Writer};
+use crate::service::Service;
 
 // Offset in SPI memory that `spi_mirror` begins at
 const SPI_ORIGIN: u16 = 0x6000;
@@ -13,48 +14,58 @@ const PENDING_LEDS: u8 = 0b1111_0000;
 pub struct Driver {
     device: Device,
     frames: ArrayDeque<[InputFrame; 32], Wrapping>,
+    // TODO see if there's a nice way to store generic Futures here
+    service_tasks: Vec<task::JoinHandle<()>>,
 }
 
 impl Driver {
-    pub fn for_serial_number(serial_number: &str) -> DriverBuilder {
-        DriverBuilder {
-            serial_number: String::from(serial_number),
-            readers: Default::default(),
-            writers: Default::default(),
-        }
+    pub fn for_serial_number(serial_number: &'static str) -> DriverBuilder {
+        DriverBuilder::new(serial_number)
     }
 
-    pub async fn listen(&self) {}
+    pub async fn start(&self) {}
 }
 
 pub struct DriverBuilder {
-    serial_number: String,
-    readers: Vec<Box<dyn Reader>>,
-    writers: Vec<Box<dyn Writer>>,
+    serial_number: &'static str,
+    services: Vec<Box<dyn Service + Send + Sync>>,
 }
 
 impl DriverBuilder {
-    pub fn with_reader(self, reader: Box<dyn Reader>) -> Self {
+    fn new(serial_number: &'static str) -> DriverBuilder {
+        DriverBuilder {
+            serial_number,
+            services: Vec::new(),
+        }
+    }
+
+    pub fn with<T: Service + Send + Sync + 'static>(mut self, service: T) -> Self {
+        self.services.push(Box::new(service));
         self
     }
 
-    pub fn with_writer(self, writer: Box<dyn Writer>) -> Self {
-        self
-    }
+    pub fn build(self) -> Driver {
+        let DriverBuilder {
+            serial_number,
+            services,
+        } = self;
 
-    pub fn build(self) -> HidResult<Driver> {
-        Device::for_serial_number(&self.serial_number).map(|device| Driver {
+        let device = Device::new(serial_number);
+
+        let (sender, receiver) = channel(32);
+        let channel = DriverChannel(sender, receiver);
+
+        let service_tasks = services
+            .iter()
+            .map(|svc| svc.start_service(&channel))
+            .collect();
+
+        Driver {
             device,
-            frames: ArrayDeque::default(),
-        })
-        // TODO Find a way to guarantee this isn't racing other input packets
-        // device.flush()
-        //     .and_then(|_| device.set_input_mode(InputMode::Simple))
-        //     .and_then(|_| device.await_input())
-        //     .and_then(|_| device.get_device_info())
-        //     .and_then(|_| device.await_input())
-        //     .and_then(|_| device.read_spi(0x603d, 24)) // Calibration and colors
-        //     .and_then(|_| device.await_input())
-        //     .and_then(|_| Ok(device))
+            frames: ArrayDeque::new(),
+            service_tasks,
+        }
     }
 }
+
+pub struct DriverChannel(Sender<()>, Receiver<()>);

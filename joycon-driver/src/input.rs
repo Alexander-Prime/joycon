@@ -6,11 +6,11 @@ use InputReport::*;
 
 type BatteryState = u8;
 
-pub enum InputReport<'a> {
+pub enum InputReport {
     CommandResponse {
         battery: BatteryState,
         frame: InputFrame,
-        data: ResponseData<'a>,
+        data: ResponseData,
     },
     ExtendedInput {
         battery: BatteryState,
@@ -20,8 +20,8 @@ pub enum InputReport<'a> {
     Unknown,
 }
 
-impl<'a> From<&'a [u8]> for InputReport<'a> {
-    fn from(buf: &[u8]) -> InputReport<'_> {
+impl From<&[u8]> for InputReport {
+    fn from(buf: &[u8]) -> InputReport {
         match buf[0] {
             0x21 => CommandResponse {
                 // Timer byte at buf[1]
@@ -40,21 +40,21 @@ impl<'a> From<&'a [u8]> for InputReport<'a> {
     }
 }
 
-pub enum ResponseData<'a> {
+pub enum ResponseData {
     RequestDeviceInfo {
         firmware_version: u16,
         device_type: u8,
         mac_address: u64,
     },
     SetInputMode,
-    ReadSpi(SpiChunk<'a>),
+    ReadSpi(SpiChunk),
     SetLeds,
     GetLeds,
-    Unknown(&'a [u8]),
+    Unknown(u8),
 }
 
-impl<'a> From<&'a [u8]> for ResponseData<'a> {
-    fn from(buf: &[u8]) -> ResponseData<'_> {
+impl From<&[u8]> for ResponseData {
+    fn from(buf: &[u8]) -> ResponseData {
         match buf[1] {
             0x02 => ResponseData::RequestDeviceInfo {
                 firmware_version: LittleEndian::read_u16(&buf[2..4]),
@@ -65,18 +65,18 @@ impl<'a> From<&'a [u8]> for ResponseData<'a> {
             0x10 => ResponseData::ReadSpi(SpiChunk::from(&buf[2..])),
             0x30 => ResponseData::SetLeds,
             0x31 => ResponseData::GetLeds,
-            _ => ResponseData::Unknown(&buf[..]),
+            _ => ResponseData::Unknown(buf[1]),
         }
     }
 }
 
-pub struct SpiChunk<'a>(pub u16, pub &'a [u8]);
+pub struct SpiChunk(pub u16, pub Vec<u8>);
 
-impl<'a> From<&'a [u8]> for SpiChunk<'a> {
-    fn from(buf: &'a [u8]) -> SpiChunk<'_> {
+impl<'a> From<&[u8]> for SpiChunk {
+    fn from(buf: &[u8]) -> SpiChunk {
         let addr = LittleEndian::read_u16(&buf[..4]);
         let size = buf[4] as usize;
         let buf = &buf[5..5 + size];
-        SpiChunk(addr, buf)
+        SpiChunk(addr, Vec::from(buf))
     }
 }

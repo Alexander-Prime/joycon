@@ -1,10 +1,19 @@
-use crate::io::{Reader, Writer};
+use async_std::task;
 
-pub struct ConsoleReader;
+use crate::driver::DriverChannel;
+use crate::service::Service;
 
-impl ConsoleReader {
-    pub fn open() -> Result<Self, ()> {
-        Ok(ConsoleReader)
+pub struct ConsoleService;
+
+impl ConsoleService {
+    pub fn new() -> Result<Self, ()> {
+        Ok(ConsoleService)
+    }
+}
+
+impl Service for ConsoleService {
+    fn start_service(&self, channel: &DriverChannel) -> task::JoinHandle<()> {
+        task::spawn(async {})
     }
 
     // TODO convert this to an async listener
@@ -28,15 +37,3 @@ impl ConsoleReader {
     //     }
     // }
 }
-
-impl Reader for ConsoleReader {}
-
-pub struct ConsoleWriter;
-
-impl ConsoleWriter {
-    pub fn open() -> Result<Self, ()> {
-        Ok(ConsoleWriter)
-    }
-}
-
-impl Writer for ConsoleWriter {}

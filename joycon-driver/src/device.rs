@@ -4,25 +4,17 @@ pub mod calibration;
 pub mod frame;
 pub mod id;
 
+use async_std::{sync, task};
 use hidapi::{HidApi, HidDevice, HidError, HidResult};
 
-use common::log;
-
-use id::{Product, Vendor};
+use crate::input::InputReport;
+use crate::output::OutputReport;
+use id::Product;
 
 const DEFAULT_BODY_COLOR: (u8, u8, u8) = (0x40, 0x40, 0x40);
 const DEFAULT_BUTTON_COLOR: (u8, u8, u8) = (0x1c, 0x1c, 0x1c);
 
-fn init_api() -> HidApi {
-    HidApi::new().unwrap_or_else(|e| {
-        log::wtf("Couldn't initialize HidApi");
-        panic!(e);
-    })
-}
-
 pub struct Device {
-    hid_device: HidDevice,
-
     serial_number: String,
     rumble_counter: u8,
     leds: u8,
@@ -31,19 +23,20 @@ pub struct Device {
     product: Product,
     mac_address: u64,
 
-    // Mirror of a subset of the Joy-Con's internal flash memory
-    spi_mirror: [u8; 0xA000],
-
     // Maximum Joy-Con packet size, w/ NFC/IR data
     // Most packets won't send more than ~50 bytes
     read_buffer: [u8; 360],
+
+    // Mirror of a subset of the Joy-Con's internal flash memory
+    flash_mirror: [u8; 0xA000],
+
+    input_channel: (sync::Sender<InputReport>, sync::Receiver<InputReport>),
+    output_channel: (sync::Sender<OutputReport>, sync::Receiver<OutputReport>),
 }
 
 impl Device {
-    fn open(hid_device: HidDevice) -> HidResult<Device> {
-        Ok(Device {
-            hid_device,
-
+    pub fn new(serial: &'static str) -> Device {
+        Device {
             rumble_counter: 0,
             serial_number: String::default(),
             leds: 0x00,
@@ -52,33 +45,79 @@ impl Device {
             mac_address: 0,
             product: Product::JoyConR,
 
-            spi_mirror: [0; 0xA000],
+            flash_mirror: [0; 0xA000],
 
-            read_buffer: [0; 360],
-        })
+            read_buffer: [0u8; 360],
+
+            input_channel: sync::channel::<InputReport>(32),
+            output_channel: sync::channel::<OutputReport>(32),
+        }
     }
 
-    pub fn find_product(product: Product) -> HidResult<Device> {
-        let api = init_api();
-        api.open(Vendor::Nintendo as u16, product as u16)
-            .and_then(|dev| Self::open(dev))
-    }
-
-    pub fn for_serial_number(serial: &str) -> HidResult<Device> {
-        let api = init_api();
-        api.devices()
+    async fn start(&mut self) -> HidResult<()> {
+        let Device { serial_number, .. } = self;
+        let api = HidApi::new()?;
+        let dev_info = api
+            .devices()
             .iter()
-            .find(|&dev| dev.serial_number == Some(String::from(serial)))
-            .ok_or(HidError::HidApiError {
-                message: format!("Couldn't find a device matching serial \"{}\"", serial),
+            .find(|dev| match &dev.serial_number {
+                // TODO find a way to do this as a single condition expression
+                Some(s) if s == serial_number => true,
+                _ => false,
             })
-            .and_then(|dev| api.open_path(&dev.path))
-            .and_then(|dev| Self::open(dev))
+            .ok_or(HidError::HidApiError {
+                message: format!(
+                    "Couldn't find a device matching serial \"{}\"",
+                    serial_number
+                ),
+            })?;
+
+        let hid_device = api.open_path(&dev_info.path)?;
+        hid_device.set_blocking_mode(false)?;
+
+        loop {
+            self.handle_read(&hid_device).await?;
+            self.handle_write(&hid_device).await?;
+        }
+
+        Ok(())
     }
 
-    pub async fn receive(&self) -> () {}
+    async fn handle_read(&mut self, hid_device: &HidDevice) -> HidResult<()> {
+        while hid_device.read(&mut self.read_buffer[..])? > 0 {
+            let report = InputReport::from(&self.read_buffer[..]);
+            self.handle_input_report_internal(report);
+            self.input_channel
+                .0
+                .send(InputReport::from(&self.read_buffer[..]))
+                .await;
+            task::yield_now().await;
+        }
+        Ok(())
+    }
 
-    pub async fn send() -> () {}
+    async fn handle_write(&self, hid_device: &HidDevice) -> HidResult<()> {
+        let Device { output_channel, .. } = self;
+        let (.., receiver) = output_channel;
+        while !receiver.is_empty() {
+            if let Some(item) = receiver.recv().await {
+                hid_device.write(&<Vec<u8>>::from(item))?;
+            }
+        }
+        Ok(())
+    }
+
+    pub fn get_receiver(&self) -> sync::Receiver<InputReport> {
+        let (.., receiver) = &self.input_channel;
+        receiver.clone()
+    }
+
+    pub fn get_sender(&self) -> sync::Sender<OutputReport> {
+        let (sender, ..) = &self.output_channel;
+        sender.clone()
+    }
+
+    fn handle_input_report_internal(&mut self, report: InputReport) {}
 }
 
 pub enum InputMode {
@@ -87,7 +126,7 @@ pub enum InputMode {
     Simple,
 }
 
-impl<'a> From<&'a u8> for InputMode {
+impl From<&u8> for InputMode {
     fn from(code: &u8) -> InputMode {
         match code {
             0x30 => InputMode::Full,
@@ -98,8 +137,8 @@ impl<'a> From<&'a u8> for InputMode {
     }
 }
 
-impl<'a> From<&'a InputMode> for u8 {
-    fn from(mode: &'a InputMode) -> u8 {
+impl From<&InputMode> for u8 {
+    fn from(mode: &InputMode) -> u8 {
         match mode {
             InputMode::Full => 0x30,
             InputMode::NfcIr => 0x31,
@@ -115,7 +154,7 @@ pub enum HciState {
     Home,
 }
 
-impl<'a> From<&'a u8> for HciState {
+impl From<&u8> for HciState {
     fn from(code: &u8) -> HciState {
         match code {
             0x00 => HciState::Disconnect,
@@ -127,8 +166,8 @@ impl<'a> From<&'a u8> for HciState {
     }
 }
 
-impl<'a> From<&'a HciState> for u8 {
-    fn from(state: &'a HciState) -> u8 {
+impl From<&HciState> for u8 {
+    fn from(state: &HciState) -> u8 {
         match state {
             HciState::Disconnect => 0x00,
             HciState::Reconnect => 0x01,
