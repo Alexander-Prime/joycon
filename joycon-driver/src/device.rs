@@ -9,14 +9,9 @@ use hidapi::{HidApi, HidDevice, HidError, HidResult};
 
 use crate::input::InputReport;
 use crate::output::OutputReport;
-use id::Product;
 
 pub struct Device {
     serial_number: String,
-
-    firmware_version: u16,
-    product: Product,
-    mac_address: u64,
 
     // Maximum Joy-Con packet size, w/ NFC/IR data
     // Most packets won't send more than ~50 bytes
@@ -30,10 +25,6 @@ impl Device {
     pub fn new(serial: &'static str) -> Device {
         Device {
             serial_number: String::from(serial),
-
-            firmware_version: 0,
-            mac_address: 0,
-            product: Product::JoyConR,
 
             read_buffer: [0u8; 360],
 
