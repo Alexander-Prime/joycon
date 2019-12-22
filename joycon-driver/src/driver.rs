@@ -1,21 +1,22 @@
-use arraydeque::{ArrayDeque, Wrapping};
+mod command;
+mod event;
+
 use async_std::sync::{channel, Receiver, Sender};
 use async_std::task;
+use hidapi::HidResult;
 
-use crate::device::frame::InputFrame;
 use crate::device::Device;
+use crate::input::InputReport;
+use crate::output::OutputReport;
 use crate::service::Service;
 
-// Offset in SPI memory that `spi_mirror` begins at
-const SPI_ORIGIN: u16 = 0x6000;
-
-const PENDING_LEDS: u8 = 0b1111_0000;
+pub use self::command::DriverCommand;
+pub use self::event::DriverEvent;
 
 pub struct Driver {
     device: Device,
-    frames: ArrayDeque<[InputFrame; 32], Wrapping>,
-    // TODO see if there's a nice way to store generic Futures here
-    service_tasks: Vec<task::JoinHandle<()>>,
+    event_sender: Sender<DriverEvent>,
+    command_receiver: Receiver<DriverCommand>,
 }
 
 impl Driver {
@@ -23,7 +24,30 @@ impl Driver {
         DriverBuilder::new(serial_number)
     }
 
-    pub async fn start(&self) {}
+    pub async fn start(mut self) -> HidResult<()> {
+        let report_sender = self.device.get_sender();
+        let report_receiver = self.device.get_receiver();
+
+        let command_receiver = self.command_receiver;
+        let event_sender = self.event_sender;
+
+        task::spawn(async move {
+            while let Some(command) = command_receiver.recv().await {
+                Self::handle_output(command, &report_sender).await;
+            }
+        });
+        task::spawn(async move {
+            while let Some(report) = report_receiver.recv().await {
+                Self::handle_input(report, &event_sender).await;
+            }
+        });
+
+        self.device.start().await
+    }
+
+    async fn handle_input(report: InputReport, event_sender: &Sender<DriverEvent>) {}
+
+    async fn handle_output(command: DriverCommand, report_sender: &Sender<OutputReport>) {}
 }
 
 pub struct DriverBuilder {
@@ -52,20 +76,20 @@ impl DriverBuilder {
 
         let device = Device::new(serial_number);
 
-        let (sender, receiver) = channel(32);
-        let channel = DriverChannel(sender, receiver);
+        let (command_sender, command_receiver) = channel(32);
+        let (event_sender, event_receiver) = channel(32);
+        let channel = DriverChannel(command_sender, event_receiver);
 
-        let service_tasks = services
-            .iter()
-            .map(|svc| svc.start_service(&channel))
-            .collect();
+        for svc in services {
+            svc.start_service(&channel);
+        }
 
         Driver {
             device,
-            frames: ArrayDeque::new(),
-            service_tasks,
+            event_sender,
+            command_receiver,
         }
     }
 }
 
-pub struct DriverChannel(Sender<()>, Receiver<()>);
+pub struct DriverChannel(Sender<DriverCommand>, Receiver<DriverEvent>);

@@ -11,13 +11,8 @@ use crate::input::InputReport;
 use crate::output::OutputReport;
 use id::Product;
 
-const DEFAULT_BODY_COLOR: (u8, u8, u8) = (0x40, 0x40, 0x40);
-const DEFAULT_BUTTON_COLOR: (u8, u8, u8) = (0x1c, 0x1c, 0x1c);
-
 pub struct Device {
     serial_number: String,
-    rumble_counter: u8,
-    leds: u8,
 
     firmware_version: u16,
     product: Product,
@@ -27,9 +22,6 @@ pub struct Device {
     // Most packets won't send more than ~50 bytes
     read_buffer: [u8; 360],
 
-    // Mirror of a subset of the Joy-Con's internal flash memory
-    flash_mirror: [u8; 0xA000],
-
     input_channel: (sync::Sender<InputReport>, sync::Receiver<InputReport>),
     output_channel: (sync::Sender<OutputReport>, sync::Receiver<OutputReport>),
 }
@@ -37,15 +29,11 @@ pub struct Device {
 impl Device {
     pub fn new(serial: &'static str) -> Device {
         Device {
-            rumble_counter: 0,
-            serial_number: String::default(),
-            leds: 0x00,
+            serial_number: String::from(serial),
 
             firmware_version: 0,
             mac_address: 0,
             product: Product::JoyConR,
-
-            flash_mirror: [0; 0xA000],
 
             read_buffer: [0u8; 360],
 
@@ -54,7 +42,7 @@ impl Device {
         }
     }
 
-    async fn start(&mut self) -> HidResult<()> {
+    pub async fn start(&mut self) -> HidResult<()> {
         let Device { serial_number, .. } = self;
         let api = HidApi::new()?;
         let dev_info = api
@@ -72,15 +60,13 @@ impl Device {
                 ),
             })?;
 
-        let hid_device = api.open_path(&dev_info.path)?;
+        let hid_device = dev_info.open_device(&api)?;
         hid_device.set_blocking_mode(false)?;
 
         loop {
             self.handle_read(&hid_device).await?;
             self.handle_write(&hid_device).await?;
         }
-
-        Ok(())
     }
 
     async fn handle_read(&mut self, hid_device: &HidDevice) -> HidResult<()> {

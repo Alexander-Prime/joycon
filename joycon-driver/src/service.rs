@@ -1,8 +1,9 @@
 pub mod console;
 pub mod socket;
 
-use crate::driver::DriverChannel;
 use async_std::task::JoinHandle;
+
+use crate::driver::DriverChannel;
 
 pub use self::console::ConsoleService;
 pub use self::socket::SocketService;
