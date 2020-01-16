@@ -45,7 +45,27 @@ impl Driver {
         self.device.start().await
     }
 
-    async fn handle_input(report: InputReport, event_sender: &Sender<DriverEvent>) {}
+    async fn handle_input(report: InputReport, event_sender: &Sender<DriverEvent>) {
+        match report {
+            InputReport::SimpleInput(buttons, stick) => {
+                let e = ();
+                event_sender.send(()).await
+            }
+            InputReport::ExtendedInput { battery, frame } => {
+                let e = ();
+                event_sender.send(()).await
+            }
+            InputReport::CommandResponse {
+                battery,
+                frame,
+                data,
+            } => {
+                let e = ();
+                event_sender.send(()).await
+            }
+            InputReport::Unknown => {}
+        }
+    }
 
     async fn handle_output(command: DriverCommand, report_sender: &Sender<OutputReport>) {}
 }
