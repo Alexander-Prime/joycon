@@ -1,18 +1,18 @@
 use async_std::task;
 
 use crate::driver::DriverChannel;
-use crate::service::Service;
+use crate::handler::Handler;
 
-pub struct ConsoleService;
+pub struct ConsoleHandler;
 
-impl ConsoleService {
+impl ConsoleHandler {
     pub fn new() -> Result<Self, ()> {
-        Ok(ConsoleService)
+        Ok(ConsoleHandler)
     }
 }
 
-impl Service for ConsoleService {
-    fn start_service(&self, channel: &DriverChannel) -> task::JoinHandle<()> {
+impl Handler for ConsoleHandler {
+    fn start(&self, channel: &DriverChannel) -> task::JoinHandle<()> {
         task::spawn(async {})
     }
 

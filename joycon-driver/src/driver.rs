@@ -6,9 +6,9 @@ use async_std::task;
 use hidapi::HidResult;
 
 use crate::device::Device;
+use crate::handler::Handler;
 use crate::input::InputReport;
 use crate::output::OutputReport;
-use crate::service::Service;
 
 pub use self::command::DriverCommand;
 pub use self::event::DriverEvent;
@@ -72,7 +72,7 @@ impl Driver {
 
 pub struct DriverBuilder {
     serial_number: &'static str,
-    services: Vec<Box<dyn Service + Send + Sync>>,
+    services: Vec<Box<dyn Handler + Send + Sync>>,
 }
 
 impl DriverBuilder {
@@ -83,7 +83,7 @@ impl DriverBuilder {
         }
     }
 
-    pub fn with<T: Service + Send + Sync + 'static>(mut self, service: T) -> Self {
+    pub fn with<T: Handler + Send + Sync + 'static>(mut self, service: T) -> Self {
         self.services.push(Box::new(service));
         self
     }
@@ -101,7 +101,7 @@ impl DriverBuilder {
         let channel = DriverChannel(command_sender, event_receiver);
 
         for svc in services {
-            svc.start_service(&channel);
+            svc.start(&channel);
         }
 
         Driver {

@@ -1,12 +1,12 @@
 mod device;
 mod driver;
+mod handler;
 mod input;
 mod output;
-mod service;
 
 use crate::driver::Driver;
-use crate::service::ConsoleService;
-use crate::service::SocketService;
+use crate::handler::ConsoleHandler;
+use crate::handler::SocketHandler;
 
 #[async_std::main]
 async fn main() -> Result<(), ()> {
@@ -15,8 +15,8 @@ async fn main() -> Result<(), ()> {
     let socket_path = format!("/var/run/joycond/{}.fifo", device_id);
 
     Driver::for_serial_number(device_id)
-        .with(ConsoleService::new()?)
-        .with(SocketService::new(std::path::Path::new(&socket_path))?)
+        .with(ConsoleHandler::new()?)
+        .with(SocketHandler::new(std::path::Path::new(&socket_path))?)
         .build()
         .start()
         .await;
