@@ -49,11 +49,11 @@ impl Driver {
         match report {
             InputReport::SimpleInput(buttons, stick) => {
                 let e = ();
-                event_sender.send(()).await
+                event_sender.send(DriverEvent::Disconnect).await
             }
             InputReport::ExtendedInput { battery, frame } => {
                 let e = ();
-                event_sender.send(()).await
+                event_sender.send(DriverEvent::Disconnect).await
             }
             InputReport::CommandResponse {
                 battery,
@@ -61,7 +61,7 @@ impl Driver {
                 data,
             } => {
                 let e = ();
-                event_sender.send(()).await
+                event_sender.send(DriverEvent::Disconnect).await
             }
             InputReport::Unknown => {}
         }
