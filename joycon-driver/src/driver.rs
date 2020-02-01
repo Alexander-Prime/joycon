@@ -1,22 +1,18 @@
 mod command;
 mod event;
 
-use async_std::sync::{channel, Receiver, Sender};
-use async_std::task;
-use hidapi::HidResult;
+use hidapi::HidError;
 
+use crate::data::raw::InputReport;
 use crate::device::Device;
 use crate::handler::Handler;
-use crate::input::InputReport;
-use crate::output::OutputReport;
 
 pub use self::command::DriverCommand;
 pub use self::event::DriverEvent;
 
 pub struct Driver {
     device: Device,
-    event_sender: Sender<DriverEvent>,
-    command_receiver: Receiver<DriverCommand>,
+    handlers: Vec<Box<dyn Handler>>,
 }
 
 impl Driver {
@@ -24,92 +20,68 @@ impl Driver {
         DriverBuilder::new(serial_number)
     }
 
-    pub async fn start(mut self) -> HidResult<()> {
-        let report_sender = self.device.get_sender();
-        let report_receiver = self.device.get_receiver();
-
-        let command_receiver = self.command_receiver;
-        let event_sender = self.event_sender;
-
-        task::spawn(async move {
-            while let Some(command) = command_receiver.recv().await {
-                Self::handle_output(command, &report_sender).await;
-            }
-        });
-        task::spawn(async move {
-            while let Some(report) = report_receiver.recv().await {
-                Self::handle_input(report, &event_sender).await;
-            }
-        });
-
-        self.device.start().await
-    }
-
-    async fn handle_input(report: InputReport, event_sender: &Sender<DriverEvent>) {
-        match report {
-            InputReport::SimpleInput(buttons, stick) => {
-                let e = ();
-                event_sender.send(DriverEvent::Disconnect).await
-            }
-            InputReport::ExtendedInput { battery, frame } => {
-                let e = ();
-                event_sender.send(DriverEvent::Disconnect).await
-            }
-            InputReport::CommandResponse {
-                battery,
-                frame,
-                data,
-            } => {
-                let e = ();
-                event_sender.send(DriverEvent::Disconnect).await
-            }
-            InputReport::Unknown => {}
+    pub fn start(mut self) -> DriverResult<()> {
+        loop {
+            self.handle_input()?;
+            self.handle_output()?;
         }
     }
 
-    async fn handle_output(command: DriverCommand, report_sender: &Sender<OutputReport>) {}
+    fn handle_input<'a>(&mut self) -> DriverResult<()> {
+        while let Some(result) = self.device.read() {
+            let report = result.map_err(|e| DriverError::ReadFailed(e))?;
+            match report.report_type() {
+                InputReport::TYPE_SIMPLE_INPUT => (), // TODO Convert these into fake InputFrames
+                InputReport::TYPE_STANDARD_INPUT => (),
+                InputReport::TYPE_SUBCOMMAND_REPLY => (),
+                _ => (), // TODO Generate some kind of debug event
+            }
+        }
+        Ok(())
+    }
+
+    fn handle_output<'a>(&mut self) -> DriverResult<()> {
+        for h in self.handlers.iter_mut() {
+            while let Some(command) = h.read() {}
+        }
+        Ok(())
+    }
 }
 
 pub struct DriverBuilder {
     serial_number: &'static str,
-    services: Vec<Box<dyn Handler + Send + Sync>>,
+    handlers: Vec<Box<dyn Handler>>,
 }
 
 impl DriverBuilder {
     fn new(serial_number: &'static str) -> DriverBuilder {
         DriverBuilder {
             serial_number,
-            services: Vec::new(),
+            handlers: Vec::new(),
         }
     }
 
-    pub fn with<T: Handler + Send + Sync + 'static>(mut self, service: T) -> Self {
-        self.services.push(Box::new(service));
+    pub fn with<T: Handler + 'static>(mut self, service: T) -> Self {
+        self.handlers.push(Box::new(service));
         self
     }
 
-    pub fn build(self) -> Driver {
+    pub fn build(self) -> DriverResult<Driver> {
         let DriverBuilder {
             serial_number,
-            services,
+            handlers,
         } = self;
 
-        let device = Device::new(serial_number);
+        let device = Device::open(serial_number).map_err(|e| DriverError::BuildFailed(e))?;
 
-        let (command_sender, command_receiver) = channel(32);
-        let (event_sender, event_receiver) = channel(32);
-        let channel = DriverChannel(command_sender, event_receiver);
-
-        for svc in services {
-            svc.start(&channel);
-        }
-
-        Driver {
-            device,
-            event_sender,
-            command_receiver,
-        }
+        Ok(Driver { device, handlers })
     }
 }
 
-pub struct DriverChannel(Sender<DriverCommand>, Receiver<DriverEvent>);
+pub type DriverResult<T> = Result<T, DriverError>;
+
+pub enum DriverError {
+    BuildFailed(HidError),
+    CommandFailed(DriverCommand),
+    ReadFailed(HidError),
+}

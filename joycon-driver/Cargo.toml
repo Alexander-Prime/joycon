@@ -5,15 +5,11 @@ authors = ["Alexander Peters <alexander.n.peters@gmail.com>"]
 edition = "2018"
 
 [dependencies]
-arraydeque = "0.4"
-async-std = { version = "1.2", features = ["attributes", "unstable"] }
+arrayref = "0.3"
+bitflags = "1.2"
 byteorder = "1.2"
 common = { path = "../common" }
 getopts = "0.2"
+hidapi = { version = "0.5", default-features = false, features = ["linux-static-hidraw"] }
 signal-hook = "0.1"
 termion = "1.5"
-
-[dependencies.hidapi]
-version = "0.5"
-default-features = false
-features = ["linux-static-hidraw"]

@@ -1,4 +1,4 @@
-use crate::device::frame::InputFrame;
+use crate::data::InputFrame;
 
 pub enum DriverEvent {
   Frame(InputFrame),

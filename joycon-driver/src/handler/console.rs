@@ -1,7 +1,5 @@
-use async_std::task;
-
-use crate::driver::DriverChannel;
-use crate::handler::Handler;
+use crate::driver::{DriverCommand, DriverEvent};
+use crate::handler::{Handler, HandlerResult};
 
 pub struct ConsoleHandler;
 
@@ -12,8 +10,12 @@ impl ConsoleHandler {
 }
 
 impl Handler for ConsoleHandler {
-    fn start(&self, channel: &DriverChannel) -> task::JoinHandle<()> {
-        task::spawn(async {})
+    fn read(&mut self) -> Option<DriverCommand> {
+        None
+    }
+
+    fn write(&mut self, event: DriverEvent) -> HandlerResult {
+        Ok(())
     }
 
     // TODO convert this to an async listener
