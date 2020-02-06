@@ -3,11 +3,14 @@ pub mod id;
 use hidapi::{HidApi, HidDevice, HidError, HidResult};
 
 use crate::data::raw::{InputReport, OutputReport};
+use crate::device::id::{Product, Vendor};
 
 pub struct Device {
-    serial_number: String,
-    hid_device: HidDevice,
+    pub serial_number: String,
+    pub product: Product,
+    pub vendor: Vendor,
 
+    hid_device: HidDevice,
     // Maximum Joy-Con packet size, w/ NFC/IR data
     // Most packets won't send more than ~50 bytes
     read_buffer: [u8; 360],
@@ -33,6 +36,8 @@ impl Device {
 
         Ok(Self {
             serial_number: serial.to_owned(),
+            product: Product::from_product_id(dev_info.product_id),
+            vendor: Vendor::from_vendor_id(dev_info.vendor_id),
             hid_device,
             read_buffer: [0u8; 360],
         })
@@ -42,7 +47,10 @@ impl Device {
         match self.hid_device.read(&mut self.read_buffer) {
             Ok(0) => None,
             Err(e) => Some(Err(e)),
-            Ok(_) => Some(Ok(InputReport(&self.read_buffer))),
+            Ok(_) => {
+                self.handle_input_report_internal(&self.read_buffer);
+                Some(Ok(InputReport(&self.read_buffer)))
+            }
         }
     }
 
@@ -50,6 +58,8 @@ impl Device {
         self.hid_device.write(report.0)?;
         Ok(())
     }
+
+    fn handle_input_report_internal(&self, buf: &[u8; 360]) {}
 }
 
 pub enum InputMode {

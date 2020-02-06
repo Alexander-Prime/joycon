@@ -14,7 +14,7 @@ impl Handler for ConsoleHandler {
         None
     }
 
-    fn write(&mut self, event: DriverEvent) -> HandlerResult {
+    fn write(&mut self, event: &DriverEvent) -> HandlerResult<()> {
         Ok(())
     }
 

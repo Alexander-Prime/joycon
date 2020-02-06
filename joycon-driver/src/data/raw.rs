@@ -1,5 +1,4 @@
 use bitflags::bitflags;
-use byteorder::{ByteOrder, LittleEndian};
 
 bitflags! {
     pub struct JoyconRightButtons: u8 {
@@ -71,20 +70,4 @@ pub struct OutputReport<'a>(pub &'a [u8; 48]);
 
 impl OutputReport<'_> {
     pub const TYPE_SUBCOMMAND: u8 = 0x10;
-}
-
-pub enum StickCalibration {
-    Left([u8; 3]),
-    Right([u8; 3]),
-}
-
-pub struct AccelCalibration([u8; 6]);
-
-pub struct GyroCalibration([u8; 6]);
-
-pub struct Calibration(StickCalibration, AccelCalibration, GyroCalibration);
-
-fn u12_pair_from_bytes(buf: &[u8; 3]) -> (u16, u16) {
-    let pair = LittleEndian::read_u24(buf);
-    ((pair & 0xfff) as u16, (pair >> 12) as u16)
 }

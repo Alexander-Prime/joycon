@@ -16,7 +16,7 @@ impl Handler for SocketHandler {
         None
     }
 
-    fn write(&mut self, event: DriverEvent) -> HandlerResult {
+    fn write(&mut self, event: &DriverEvent) -> HandlerResult<()> {
         Ok(())
     }
 }

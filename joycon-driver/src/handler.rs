@@ -8,7 +8,11 @@ pub use self::socket::SocketHandler;
 
 pub trait Handler {
   fn read(&mut self) -> Option<DriverCommand>;
-  fn write(&mut self, event: DriverEvent) -> HandlerResult;
+  fn write(&mut self, event: &DriverEvent) -> HandlerResult<()>;
 }
 
-pub type HandlerResult = Result<(), ()>;
+pub type HandlerResult<T> = Result<T, HandlerError>;
+
+pub enum HandlerError {
+  Unknown,
+}
