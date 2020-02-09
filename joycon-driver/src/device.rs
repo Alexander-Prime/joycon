@@ -33,6 +33,7 @@ impl Device {
 
         let hid_device = dev_info.open_device(&api)?;
         hid_device.set_blocking_mode(false)?;
+        hid_device.write(&[0x03, 0x30])?;
 
         Ok(Self {
             serial_number: serial.to_owned(),
