@@ -102,6 +102,7 @@ impl DriverBuilder {
 
 pub type DriverResult<T> = Result<T, DriverError>;
 
+#[derive(Debug)]
 pub enum DriverError {
     BuildFailed(HidError),
     CommandFailed(DriverCommand),
