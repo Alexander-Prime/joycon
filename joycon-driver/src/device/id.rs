@@ -15,7 +15,7 @@ impl Product {
             0x2007 => JoyconRight,
             0x2009 => ProController,
             0x200e => ChargeGrip,
-            ______ => Unknown(______),
+            any => Unknown(any),
         }
     }
 
@@ -26,7 +26,7 @@ impl Product {
             0x01 => JoyconLeft,
             0x02 => JoyconRight,
             0x03 => ProController,
-            ____ => Unknown(0),
+            _ => Unknown(0),
         }
     }
 }
@@ -47,7 +47,7 @@ impl Vendor {
         use Vendor::*;
         match vendor_id {
             0x057e => Nintendo,
-            ______ => Unknown(______),
+            any => Unknown(any),
         }
     }
 }

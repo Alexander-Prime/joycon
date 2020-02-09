@@ -17,7 +17,7 @@ impl Handler for OsSignalHandler {
         for signal in self.0.pending() {
             match signal {
                 SIGINT | SIGTERM => return Some(DriverCommand::Stop),
-                ________________ => unreachable!(),
+                _ => unreachable!(),
             }
         }
         None

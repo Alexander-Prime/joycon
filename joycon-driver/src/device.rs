@@ -47,10 +47,7 @@ impl Device {
         match self.hid_device.read(&mut self.read_buffer) {
             Ok(0) => None,
             Err(e) => Some(Err(e)),
-            Ok(_) => {
-                self.handle_input_report_internal(&self.read_buffer);
-                Some(Ok(InputReport(&self.read_buffer)))
-            }
+            Ok(_) => Some(Ok(InputReport(&self.read_buffer))),
         }
     }
 
@@ -58,8 +55,6 @@ impl Device {
         self.hid_device.write(report.0)?;
         Ok(())
     }
-
-    fn handle_input_report_internal(&self, buf: &[u8; 360]) {}
 }
 
 pub enum InputMode {

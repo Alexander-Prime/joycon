@@ -89,7 +89,7 @@ impl Handler for ConsoleHandler {
     fn write(&mut self, event: &DriverEvent) -> HandlerResult<()> {
         match event {
             DriverEvent::Frame(frame) => Self::print_input_frame(frame),
-            _________________________ => (),
+            _ => (),
         };
         Ok(())
     }
